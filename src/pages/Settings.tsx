@@ -14,6 +14,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import type { BusinessSettings } from '@/types';
 import { Building2, Save, Upload, Trash2, Globe, Mail, Phone, MapPin, FileText } from 'lucide-react';
+import BackupRestore from '@/components/BackupRestore';
 
 export default function Settings() {
   const { settings, setSettings } = useApp();
@@ -247,6 +248,9 @@ export default function Settings() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Backup & Restore */}
+        <BackupRestore />
 
         {/* Save Button */}
         <div className="flex justify-end">

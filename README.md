@@ -1,53 +1,80 @@
-# Welcome to your Lovable project
+# BookIt - Invoice Management System
 
-## Project info
+A modern invoice and accounting management application built with React, TypeScript, and Electron.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Features
 
-## How can I edit this code?
+- Customer and vendor management
+- Invoice creation and management
+- Purchase invoice tracking
+- Payment processing
+- Quotation management
+- Chart of accounts
+- Double-entry accounting
+- Backup and restore functionality
 
-There are several ways of editing your application.
+## Database
 
-**Use Lovable**
+The application uses SQLite as its database, stored as a single `.db` file that users can easily backup and restore.
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+## Development
 
-Changes made via Lovable will be committed automatically to this repo.
+### Prerequisites
 
-**Use your preferred IDE**
+- Node.js & npm
+- For desktop app: Electron
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
+### Installation
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+# Install dependencies
+npm install
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+# Rebuild native modules for Electron
+npx electron-rebuild
+```
 
-# Step 3: Install the necessary dependencies.
-npm i
+### Running the Application
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+#### Web Version (Development)
+```sh
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+#### Desktop App (Development)
+```sh
+npm run electron-dev
+```
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+#### Desktop App (Production)
+```sh
+npm run build
+npm run electron
+```
 
-**Use GitHub Codespaces**
+### Database Location
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
+The SQLite database is stored at:
+- Windows: `%APPDATA%\invoiceflow\invoiceflow.db`
+- macOS: `~/Library/Application Support/invoiceflow/invoiceflow.db`
+- Linux: `~/.config/invoiceflow/invoiceflow.db`
+
+## Project Structure
+
+- `src/` - React application source code
+- `main.js` - Electron main process
+- `preload.js` - Electron preload script for IPC
+- `dist/` - Built application files
+
+## Technologies Used
+
+- React 18
+- TypeScript
+- Vite
+- Electron
+- SQLite3
+- Tailwind CSS
+- Radix UI Components
 - Edit files directly within the Codespace and commit and push your changes once you're done.
 
 ## What technologies are used for this project?
