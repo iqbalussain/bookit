@@ -51,6 +51,7 @@ const App = () => (
               <Route path="/clients" element={<ClientsList />} />
               <Route path="/clients/:id/statement" element={<ClientStatement />} />
               <Route path="/accounts" element={<ChartOfAccounts />} />
+              <Route path="/accounts/:id/statement" element={<AccountStatement />} />
               <Route path="/reports/pnl" element={<ProfitAndLoss />} />
               <Route path="/reports/balance-sheet" element={<BalanceSheet />} />
               <Route path="/reports/trial-balance" element={<TrialBalance />} />

@@ -88,12 +88,13 @@ export default function ChartOfAccounts() {
                 {accs.sort((a, b) => a.code.localeCompare(b.code)).map((acc) => {
                   const balance = getAccountBalance(acc.id);
                   return (
-                    <div key={acc.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors">
-                      <div className="flex items-center gap-2.5">
+                    <div key={acc.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors group">
+                      <Link to={`/accounts/${acc.id}/statement`} className="flex items-center gap-2.5 flex-1 min-w-0">
                         <span className="text-xs font-mono text-muted-foreground w-10">{acc.code}</span>
-                        <span className="text-sm">{acc.name}</span>
+                        <span className="text-sm group-hover:text-primary transition-colors">{acc.name}</span>
                         {acc.isSystem && <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">System</Badge>}
-                      </div>
+                        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/0 group-hover:text-muted-foreground transition-all ml-1" />
+                      </Link>
                       <div className="flex items-center gap-2">
                         <span className={`text-xs font-medium ${balance >= 0 ? '' : 'text-destructive'}`}>
                           {balance !== 0 ? `${balance >= 0 ? 'Dr' : 'Cr'} ${Math.abs(balance).toLocaleString('en-IN')}` : '—'}
