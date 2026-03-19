@@ -2,10 +2,12 @@ declare global {
   interface Window {
     electronAPI?: {
       getDbPath: () => Promise<string>;
+      backup: (destination: string) => Promise<void>;
+      restore: (source: string) => Promise<void>;
       backupDatabase: (destination: string) => Promise<{ success: boolean; message?: string }>;
       restoreDatabase: (source: string) => Promise<{ success: boolean; message?: string }>;
-      showSaveDialog: (options: Record<string, unknown>) => Promise<string | undefined>;
-      showOpenDialog: (options: Record<string, unknown>) => Promise<string | undefined>;
+      showSaveDialog: (options: Record<string, unknown>) => Promise<{ canceled: boolean; filePath?: string }>;
+      showOpenDialog: (options: Record<string, unknown>) => Promise<{ canceled: boolean; filePaths: string[] }>;
     };
   }
 }
