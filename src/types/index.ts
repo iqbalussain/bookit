@@ -92,6 +92,23 @@ export interface Payment {
   createdAt: string;
 }
 
+// Voucher types
+export type VoucherType = 'expense' | 'contra' | 'loan_given' | 'loan_received';
+
+export interface Voucher {
+  id: string;
+  number: string;
+  type: VoucherType;
+  date: string;
+  partyName: string;
+  amount: number;
+  narration: string;
+  method: PaymentMethod;
+  reference?: string;
+  details: Record<string, any>;
+  createdAt: string;
+}
+
 // Double-Entry Accounting types
 export type AccountType = 'asset' | 'liability' | 'income' | 'expense' | 'equity';
 
@@ -108,7 +125,7 @@ export interface JournalEntry {
   id: string;
   date: string;
   reference: string;
-  referenceType: 'sales_invoice' | 'purchase_invoice' | 'receipt' | 'payment';
+  referenceType: 'sales_invoice' | 'purchase_invoice' | 'receipt' | 'payment' | 'expense' | 'contra' | 'loan_given' | 'loan_received';
   referenceId: string;
   description: string;
   lines: JournalLine[];
