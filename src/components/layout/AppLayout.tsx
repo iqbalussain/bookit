@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/tooltip';
 import {
   LayoutDashboard, FileText, Receipt, Users, Settings, Menu, X, ChevronRight,
-  ShoppingCart, CreditCard, BookOpen, BarChart3, ChevronDown, PanelLeftClose, PanelLeft,
+  ShoppingCart, CreditCard, BookOpen, BarChart3, ChevronDown, PanelLeftClose, PanelLeft, Wallet,
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
