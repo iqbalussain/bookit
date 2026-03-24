@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/tooltip';
 import {
   LayoutDashboard, FileText, Receipt, Users, Settings, Menu, X, ChevronRight,
-  ShoppingCart, CreditCard, BookOpen, BarChart3, ChevronDown, PanelLeftClose, PanelLeft,
+  ShoppingCart, CreditCard, BookOpen, BarChart3, ChevronDown, PanelLeftClose, PanelLeft, Wallet,
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
@@ -22,6 +22,7 @@ const navigation = [
   { name: 'Sales Invoices', href: '/invoices', icon: Receipt },
   { name: 'Purchase Invoices', href: '/purchases', icon: ShoppingCart },
   { name: 'Payments & Receipts', href: '/payments', icon: CreditCard },
+  { name: 'Vouchers', href: '/vouchers', icon: Wallet },
   { name: 'Parties', href: '/clients', icon: Users },
   { name: 'Chart of Accounts', href: '/accounts', icon: BookOpen },
 ];

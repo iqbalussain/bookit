@@ -16,6 +16,11 @@ import ClientsList from "./pages/ClientsList";
 import ClientStatement from "./pages/ClientStatement";
 import PaymentForm from "./pages/PaymentForm";
 import PaymentsReceipts from "./pages/PaymentsReceipts";
+import VoucherDashboard from "./pages/VoucherDashboard";
+import ExpensesVoucher from "./pages/ExpensesVoucher";
+import ContraVoucher from "./pages/ContraVoucher";
+import LoanGivenVoucher from "./pages/LoanGivenVoucher";
+import LoanReceivedVoucher from "./pages/LoanReceivedVoucher";
 import ChartOfAccounts from "./pages/ChartOfAccounts";
 import AccountStatement from "./pages/AccountStatement";
 import Settings from "./pages/Settings";
@@ -48,6 +53,11 @@ const App = () => (
               <Route path="/purchases/new" element={<PurchaseInvoiceForm />} />
               <Route path="/purchases/:id" element={<PurchaseInvoiceForm />} />
               <Route path="/payments" element={<PaymentsReceipts />} />
+              <Route path="/vouchers" element={<VoucherDashboard />} />
+              <Route path="/vouchers/expenses/new" element={<ExpensesVoucher />} />
+              <Route path="/vouchers/contra/new" element={<ContraVoucher />} />
+              <Route path="/vouchers/loan-given/new" element={<LoanGivenVoucher />} />
+              <Route path="/vouchers/loan-received/new" element={<LoanReceivedVoucher />} />
               <Route path="/clients" element={<ClientsList />} />
               <Route path="/clients/:id/statement" element={<ClientStatement />} />
               <Route path="/accounts" element={<ChartOfAccounts />} />
