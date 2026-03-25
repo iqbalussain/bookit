@@ -15,7 +15,7 @@ export default function BackupRestore() {
   useEffect(() => {
     const loadDbPath = async () => {
       try {
-        const path = await window.electronAPI.getDbPath();
+        const path = await window.electronAPI!.getDbPath();
         setDbPath(path);
       } catch (error) {
         console.error('Failed to get database path:', error);
