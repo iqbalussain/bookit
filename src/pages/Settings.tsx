@@ -11,9 +11,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import type { BusinessSettings } from '@/types';
-import { Building2, Save, Upload, Trash2, Globe, Mail, Phone, MapPin, FileText, RefreshCw, Info } from 'lucide-react';
+import { Building2, Save, Upload, Trash2, Globe, Mail, Phone, MapPin, FileText, RefreshCw, Info, Pencil, Check, X, Plus } from 'lucide-react';
 import BackupRestore from '@/components/BackupRestore';
 import { useState, useEffect } from 'react';
 
@@ -31,40 +32,47 @@ export default function Settings() {
 
   const { toast } = useToast();
   const [companyName, setCompanyName] = useState('');
-  const [newCompanyName, setNewCompanyName] = useState('');
+  const [editingCompanyId, setEditingCompanyId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
   const [currentVersion, setCurrentVersion] = useState('');
   const [checking, setChecking] = useState(false);
 
+  const isElectron = typeof window !== 'undefined' && !!window.electronAPI;
+
   useEffect(() => {
+    if (!window.electronAPI?.update) return;
+    const loadVersion = async () => {
+      try {
+        const version = await window.electronAPI!.update.getVersion();
+        setCurrentVersion(version);
+      } catch (error) {
+        console.error('Failed to get app version:', error);
+      }
+    };
     loadVersion();
   }, []);
 
-  const loadVersion = async () => {
-    try {
-      const version = await window.electronAPI.update.getVersion()
-      setCurrentVersion(version)
-    } catch (error) {
-      console.error('Failed to get app version:', error)
-    }
-  }
-
   const handleCheckUpdates = async () => {
-    setChecking(true)
+    if (!window.electronAPI?.update) {
+      toast({ title: 'Not available', description: 'Updates are only available in the desktop app.', variant: 'destructive' });
+      return;
+    }
+    setChecking(true);
     try {
-      await window.electronAPI.update.checkForUpdates()
+      await window.electronAPI.update.checkForUpdates();
       toast({
         title: 'Update check completed',
         description: 'If an update is available, you will see a notification.',
-      })
+      });
     } catch (error) {
       toast({
         title: 'Update check failed',
         description: 'Unable to check for updates. Please check your internet connection.',
         variant: 'destructive',
-      })
+      });
     }
-    setTimeout(() => setChecking(false), 3000)
-  }
+    setTimeout(() => setChecking(false), 3000);
+  };
 
   const handleAddCompany = () => {
     const name = companyName.trim();
@@ -72,34 +80,41 @@ export default function Settings() {
       toast({ title: 'Name required', description: 'Please enter a company name.', variant: 'destructive' });
       return;
     }
-
     createCompany(name);
     setCompanyName('');
-
     toast({ title: 'Company created', description: `Created and switched to ${name}.` });
   };
 
-  const handleRenameCompany = () => {
-    if (!selectedCompanyId) return;
-    const name = newCompanyName.trim();
+  const startEditing = (companyId: string, currentName: string) => {
+    setEditingCompanyId(companyId);
+    setEditName(currentName);
+  };
+
+  const saveEdit = () => {
+    if (!editingCompanyId) return;
+    const name = editName.trim();
     if (!name) {
-      toast({ title: 'Name required', description: 'Please enter a new name for the selected company.', variant: 'destructive' });
+      toast({ title: 'Name required', description: 'Company name cannot be empty.', variant: 'destructive' });
       return;
     }
-
-    updateCompany(selectedCompanyId, name);
-    setNewCompanyName('');
+    updateCompany(editingCompanyId, name);
+    setEditingCompanyId(null);
+    setEditName('');
     toast({ title: 'Company updated', description: `Company renamed to ${name}.` });
   };
 
-  const handleDeleteCompany = () => {
-    if (!selectedCompanyId) return;
-    if (selectedCompanyId === 'default') {
+  const cancelEdit = () => {
+    setEditingCompanyId(null);
+    setEditName('');
+  };
+
+  const handleDeleteCompany = (id: string) => {
+    if (id === 'default') {
       toast({ title: 'Cannot delete', description: 'Default company cannot be deleted.', variant: 'destructive' });
       return;
     }
-
-    deleteCompany(selectedCompanyId);
+    if (!confirm('Are you sure you want to delete this company? All its data will be removed.')) return;
+    deleteCompany(id);
     toast({ title: 'Company deleted', description: 'Company data has been removed.', variant: 'destructive' });
   };
 
@@ -126,14 +141,10 @@ export default function Settings() {
         });
         return;
       }
-
       const reader = new FileReader();
       reader.onloadend = () => {
         setSettings((prev) => ({ ...prev, logo: reader.result as string }));
-        toast({
-          title: 'Logo uploaded',
-          description: 'Your logo has been updated.',
-        });
+        toast({ title: 'Logo uploaded', description: 'Your logo has been updated.' });
       };
       reader.readAsDataURL(file);
     }
@@ -141,82 +152,120 @@ export default function Settings() {
 
   const removeLogo = () => {
     setSettings((prev) => ({ ...prev, logo: undefined }));
-    toast({
-      title: 'Logo removed',
-      description: 'Your logo has been removed.',
-    });
+    toast({ title: 'Logo removed', description: 'Your logo has been removed.' });
   };
 
   return (
     <div className="max-w-2xl mx-auto space-y-4">
-      {/* Page Header */}
       <div className="space-y-0.5">
         <h1 className="text-xl font-bold tracking-tight">Settings</h1>
-        <p className="text-xs text-muted-foreground">
-          Manage your business profile
-        </p>
+        <p className="text-xs text-muted-foreground">Manage your business profile</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Company Selection */}
+        {/* Company Management */}
         <Card>
           <CardHeader className="py-3 px-4">
-            <CardTitle className="text-sm">Company</CardTitle>
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Building2 className="h-4 w-4 text-primary" />
+              Manage Companies
+            </CardTitle>
             <CardDescription className="text-xs">
-              Switch and manage multiple company profiles.
+              Create, edit, switch, and delete company profiles.
             </CardDescription>
           </CardHeader>
           <CardContent className="px-4 pb-4 space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="company-select" className="text-xs">Active Company</Label>
-                <Select
-                  value={selectedCompanyId}
-                  onValueChange={(value) => setSelectedCompanyId(value)}
+            {/* Company List */}
+            <div className="space-y-1">
+              {companies.map((company) => (
+                <div
+                  key={company.id}
+                  className={`flex items-center gap-2 rounded-md border px-3 py-2 transition-colors ${
+                    company.id === selectedCompanyId
+                      ? 'border-primary/50 bg-primary/5'
+                      : 'border-border hover:bg-muted/50'
+                  }`}
                 >
-                  <SelectTrigger id="company-select" className="h-9">
-                    <SelectValue placeholder="Select company" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {companies.map((company) => (
-                      <SelectItem key={company.id} value={company.id}>
-                        {company.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                  {editingCompanyId === company.id ? (
+                    <Input
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      className="h-7 text-sm flex-1"
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') saveEdit();
+                        if (e.key === 'Escape') cancelEdit();
+                      }}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      className="flex-1 text-left text-sm font-medium truncate"
+                      onClick={() => setSelectedCompanyId(company.id)}
+                    >
+                      {company.name}
+                    </button>
+                  )}
 
-              <div className="space-y-1.5">
-                <Label htmlFor="new-company" className="text-xs">Create New Company</Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    id="new-company"
-                    value={companyName}
-                    onChange={(e) => setCompanyName(e.target.value)}
-                    placeholder="Company name"
-                    className="h-9"
-                  />
-                  <Button type="button" size="sm" onClick={handleAddCompany}>
-                    Add
-                  </Button>
+                  {company.id === selectedCompanyId && (
+                    <Badge variant="default" className="text-[10px] px-1.5 py-0 h-5">
+                      Active
+                    </Badge>
+                  )}
+
+                  {editingCompanyId === company.id ? (
+                    <div className="flex gap-1">
+                      <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={saveEdit}>
+                        <Check className="h-3.5 w-3.5 text-primary" />
+                      </Button>
+                      <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={cancelEdit}>
+                        <X className="h-3.5 w-3.5 text-muted-foreground" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => startEditing(company.id, company.name)}
+                      >
+                        <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        disabled={company.id === 'default'}
+                        onClick={() => handleDeleteCompany(company.id)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
-              </div>
+              ))}
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-3">
-              <Input
-                value={newCompanyName}
-                onChange={(e) => setNewCompanyName(e.target.value)}
-                placeholder="Rename selected company"
-                className="h-9"
-              />
-              <Button type="button" size="sm" onClick={handleRenameCompany} className="h-9">
-                Rename
-              </Button>
-              <Button type="button" size="sm" variant="destructive" onClick={handleDeleteCompany} className="h-9">
-                Delete
-              </Button>
+            {/* Create New Company */}
+            <div className="space-y-1.5">
+              <Label htmlFor="new-company" className="text-xs">Create New Company</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="new-company"
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  placeholder="Company name"
+                  className="h-9"
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddCompany(); } }}
+                />
+                <Button type="button" size="sm" onClick={handleAddCompany} className="gap-1.5">
+                  <Plus className="h-3.5 w-3.5" />
+                  Add
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -225,20 +274,14 @@ export default function Settings() {
         <Card>
           <CardHeader className="py-3 px-4">
             <CardTitle className="text-sm">Business Logo</CardTitle>
-            <CardDescription className="text-xs">
-              Appears on quotations and invoices
-            </CardDescription>
+            <CardDescription className="text-xs">Appears on quotations and invoices</CardDescription>
           </CardHeader>
           <CardContent className="px-4 pb-4">
             <div className="flex items-center gap-4">
               <div className="relative">
                 <div className="flex h-20 w-20 items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/25 bg-muted/50">
                   {settings.logo ? (
-                    <img
-                      src={settings.logo}
-                      alt="Logo"
-                      className="h-full w-full object-contain rounded-lg p-1"
-                    />
+                    <img src={settings.logo} alt="Logo" className="h-full w-full object-contain rounded-lg p-1" />
                   ) : (
                     <Building2 className="h-8 w-8 text-muted-foreground/50" />
                   )}
@@ -253,29 +296,15 @@ export default function Settings() {
                     <Upload className="h-3.5 w-3.5" />
                     Upload
                   </Label>
-                  <Input
-                    id="logo-upload"
-                    type="file"
-                    accept="image/*"
-                    onChange={handleLogoUpload}
-                    className="hidden"
-                  />
+                  <Input id="logo-upload" type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
                   {settings.logo && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={removeLogo}
-                      className="h-7 text-xs gap-1.5"
-                    >
+                    <Button type="button" variant="outline" size="sm" onClick={removeLogo} className="h-7 text-xs gap-1.5">
                       <Trash2 className="h-3.5 w-3.5" />
                       Remove
                     </Button>
                   )}
                 </div>
-                <p className="text-[10px] text-muted-foreground">
-                  PNG, JPG or SVG. Max 500KB.
-                </p>
+                <p className="text-[10px] text-muted-foreground">PNG, JPG or SVG. Max 500KB.</p>
               </div>
             </div>
           </CardContent>
@@ -293,72 +322,38 @@ export default function Settings() {
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="name" className="text-xs">Business Name</Label>
-                <Input
-                  id="name"
-                  value={settings.name}
-                  onChange={(e) => handleChange('name', e.target.value)}
-                  placeholder="Your Business Name"
-                  className="h-9"
-                />
+                <Input id="name" value={settings.name} onChange={(e) => handleChange('name', e.target.value)} placeholder="Your Business Name" className="h-9" />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="email" className="text-xs flex items-center gap-1.5">
                   <Mail className="h-3 w-3 text-muted-foreground" />
                   Email
                 </Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={settings.email}
-                  onChange={(e) => handleChange('email', e.target.value)}
-                  placeholder="email@example.com"
-                  className="h-9"
-                />
+                <Input id="email" type="email" value={settings.email} onChange={(e) => handleChange('email', e.target.value)} placeholder="email@example.com" className="h-9" />
               </div>
             </div>
-
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="phone" className="text-xs flex items-center gap-1.5">
                   <Phone className="h-3 w-3 text-muted-foreground" />
                   Phone
                 </Label>
-                <Input
-                  id="phone"
-                  value={settings.phone}
-                  onChange={(e) => handleChange('phone', e.target.value)}
-                  placeholder="+91 98765 43210"
-                  className="h-9"
-                />
+                <Input id="phone" value={settings.phone} onChange={(e) => handleChange('phone', e.target.value)} placeholder="+91 98765 43210" className="h-9" />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="taxNumber" className="text-xs flex items-center gap-1.5">
                   <FileText className="h-3 w-3 text-muted-foreground" />
                   GST/Tax Number
                 </Label>
-                <Input
-                  id="taxNumber"
-                  value={settings.taxNumber || ''}
-                  onChange={(e) => handleChange('taxNumber', e.target.value)}
-                  placeholder="GSTIN"
-                  className="h-9"
-                />
+                <Input id="taxNumber" value={settings.taxNumber || ''} onChange={(e) => handleChange('taxNumber', e.target.value)} placeholder="GSTIN" className="h-9" />
               </div>
             </div>
-
             <div className="space-y-1.5">
               <Label htmlFor="address" className="text-xs flex items-center gap-1.5">
                 <MapPin className="h-3 w-3 text-muted-foreground" />
                 Address
               </Label>
-              <Textarea
-                id="address"
-                value={settings.address}
-                onChange={(e) => handleChange('address', e.target.value)}
-                placeholder="Business address"
-                rows={2}
-                className="resize-none text-sm"
-              />
+              <Textarea id="address" value={settings.address} onChange={(e) => handleChange('address', e.target.value)} placeholder="Business address" rows={2} className="resize-none text-sm" />
             </div>
           </CardContent>
         </Card>
@@ -374,12 +369,7 @@ export default function Settings() {
           <CardContent className="px-4 pb-4">
             <div className="space-y-1.5 max-w-xs">
               <Label htmlFor="currency" className="text-xs">Default Currency</Label>
-              <Select
-                value={settings.currency}
-                onValueChange={(value) =>
-                  handleChange('currency', value as BusinessSettings['currency'])
-                }
-              >
+              <Select value={settings.currency} onValueChange={(value) => handleChange('currency', value as BusinessSettings['currency'])}>
                 <SelectTrigger className="h-9">
                   <SelectValue placeholder="Select currency" />
                 </SelectTrigger>
@@ -395,40 +385,35 @@ export default function Settings() {
           </CardContent>
         </Card>
 
-        {/* About & Updates */}
-        <Card>
-          <CardHeader className="py-3 px-4">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Info className="h-4 w-4 text-primary" />
-              About BookIt
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium">Current Version</p>
-                <p className="text-xs text-muted-foreground">v{currentVersion}</p>
+        {/* About & Updates - Electron only */}
+        {isElectron && (
+          <Card>
+            <CardHeader className="py-3 px-4">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Info className="h-4 w-4 text-primary" />
+                About BookIt
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">Current Version</p>
+                  <p className="text-xs text-muted-foreground">v{currentVersion}</p>
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={handleCheckUpdates} disabled={checking} className="gap-1.5">
+                  <RefreshCw className={`h-3.5 w-3.5 ${checking ? 'animate-spin' : ''}`} />
+                  {checking ? 'Checking...' : 'Check for Updates'}
+                </Button>
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleCheckUpdates}
-                disabled={checking}
-                className="gap-1.5"
-              >
-                <RefreshCw className={`h-3.5 w-3.5 ${checking ? 'animate-spin' : ''}`} />
-                {checking ? 'Checking...' : 'Check for Updates'}
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Updates are downloaded automatically. You'll be notified when a new version is available.
-            </p>
-          </CardContent>
-        </Card>
+              <p className="text-xs text-muted-foreground">
+                Updates are downloaded automatically. You'll be notified when a new version is available.
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
-        {/* Backup & Restore */}
-        <BackupRestore />
+        {/* Backup & Restore - Electron only */}
+        {isElectron && <BackupRestore />}
 
         {/* Save Button */}
         <div className="flex justify-end">
