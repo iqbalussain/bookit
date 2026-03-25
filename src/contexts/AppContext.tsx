@@ -100,6 +100,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [payments, setPayments] = useLocalStorage<Payment[]>(companyKey('payments'), []);
   const [accounts, setAccounts] = useLocalStorage<Account[]>(companyKey('accounts'), DEFAULT_ACCOUNTS);
   const [journalEntries, setJournalEntries] = useLocalStorage<JournalEntry[]>(companyKey('journal_entries'), []);
+  const [vouchers, setVouchers] = useLocalStorage<Voucher[]>(companyKey('vouchers'), []);
   const [settings, setSettings] = useLocalStorage<BusinessSettings>(companyKey('settings'), defaultSettings);
 
   // Client operations
