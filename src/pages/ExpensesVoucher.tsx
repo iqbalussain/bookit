@@ -105,7 +105,7 @@ export default function ExpensesVoucher() {
 
     createJournalEntry({
       id: crypto.randomUUID(), date, reference: voucherNumber,
-      referenceType: 'expense', referenceId: voucherId,
+      referenceType: 'expense' as const, referenceId: voucherId,
       description: `Expense: ${payTo}`,
       lines: journalLines,
       createdAt: now,

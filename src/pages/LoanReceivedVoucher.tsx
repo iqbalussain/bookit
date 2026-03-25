@@ -53,7 +53,7 @@ export default function LoanReceivedVoucher() {
 
     createJournalEntry({
       id: crypto.randomUUID(), date, reference: voucherNumber,
-      referenceType: 'loan_received', referenceId: voucherId,
+      referenceType: 'loan_received' as const, referenceId: voucherId,
       description: `Loan received from ${party?.name}`,
       lines: [
         { accountId: paymentAccountId, debit: amount, credit: 0 },

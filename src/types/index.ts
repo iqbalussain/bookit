@@ -104,11 +104,28 @@ export interface Account {
   isSystem: boolean;
 }
 
+// Voucher types
+export type VoucherType = 'contra' | 'expense' | 'loan_given' | 'loan_received';
+
+export interface Voucher {
+  id: string;
+  number: string;
+  type: VoucherType;
+  date: string;
+  partyName: string;
+  amount: number;
+  narration: string;
+  method: string;
+  reference?: string;
+  details?: any;
+  createdAt: string;
+}
+
 export interface JournalEntry {
   id: string;
   date: string;
   reference: string;
-  referenceType: 'sales_invoice' | 'purchase_invoice' | 'receipt' | 'payment';
+  referenceType: 'sales_invoice' | 'purchase_invoice' | 'receipt' | 'payment' | 'contra' | 'expense' | 'loan_given' | 'loan_received';
   referenceId: string;
   description: string;
   lines: JournalLine[];
@@ -200,6 +217,6 @@ export interface ElectronAPI {
 // Extend Window interface
 declare global {
   interface Window {
-    electronAPI: ElectronAPI;
+    electronAPI?: ElectronAPI;
   }
 }

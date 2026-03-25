@@ -1,17 +1,3 @@
-declare global {
-  interface Window {
-    electronAPI?: {
-      getDbPath: () => Promise<string>;
-      backup: (destination: string) => Promise<void>;
-      restore: (source: string) => Promise<void>;
-      backupDatabase: (destination: string) => Promise<{ success: boolean; message?: string }>;
-      restoreDatabase: (source: string) => Promise<{ success: boolean; message?: string }>;
-      showSaveDialog: (options: Record<string, unknown>) => Promise<{ canceled: boolean; filePath?: string }>;
-      showOpenDialog: (options: Record<string, unknown>) => Promise<{ canceled: boolean; filePaths: string[] }>;
-    };
-  }
-}
-
 import { useState, useEffect } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,7 +15,7 @@ export default function BackupRestore() {
   useEffect(() => {
     const loadDbPath = async () => {
       try {
-        const path = await window.electronAPI.getDbPath();
+        const path = await window.electronAPI!.getDbPath();
         setDbPath(path);
       } catch (error) {
         console.error('Failed to get database path:', error);
@@ -43,14 +29,14 @@ export default function BackupRestore() {
 
   const handleBackup = async () => {
     try {
-      const result = await window.electronAPI.showSaveDialog({
+      const result = await window.electronAPI!.showSaveDialog({
         title: 'Save Database Backup',
         defaultPath: `${companyName.replace(/\s+/g, '-')}-backup-${new Date().toISOString().split('T')[0]}.db`,
         filters: [{ name: 'Database Files', extensions: ['db'] }]
       });
 
       if (!result.canceled && result.filePath) {
-        await window.electronAPI.backup(result.filePath);
+        await window.electronAPI!.backup(result.filePath);
         toast({
           title: 'Backup saved successfully!',
           description: `Database backed up to: ${result.filePath}`,
@@ -68,14 +54,14 @@ export default function BackupRestore() {
 
   const handleRestore = async () => {
     try {
-      const result = await window.electronAPI.showOpenDialog({
+      const result = await window.electronAPI!.showOpenDialog({
         title: 'Select Database Backup',
         filters: [{ name: 'Database Files', extensions: ['db'] }],
         properties: ['openFile']
       });
 
       if (!result.canceled && result.filePaths.length > 0) {
-        await window.electronAPI.restore(result.filePaths[0]);
+        await window.electronAPI!.restore(result.filePaths[0]);
         toast({
           title: 'Restore complete!',
           description: 'Please restart the application for changes to take effect.',

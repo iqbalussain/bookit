@@ -1,6 +1,6 @@
 import React, { createContext, useContext, ReactNode } from 'react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
-import type { Client, Quotation, Invoice, PurchaseInvoice, BusinessSettings, Payment, Account, JournalEntry, JournalLine, Company } from '@/types';
+import type { Client, Quotation, Invoice, PurchaseInvoice, BusinessSettings, Payment, Account, JournalEntry, JournalLine, Company, Voucher, VoucherType } from '@/types';
 import { DEFAULT_ACCOUNTS } from '@/types';
 
 interface AppContextType {
@@ -50,6 +50,12 @@ interface AppContextType {
   setAccounts: (accounts: Account[] | ((prev: Account[]) => Account[])) => void;
   addAccount: (account: Account) => void;
   deleteAccount: (id: string) => void;
+  // Vouchers
+  vouchers: Voucher[];
+  addVoucher: (voucher: Voucher) => void;
+  generateVoucherNumber: (type: string) => string;
+
+  // Journal
   journalEntries: JournalEntry[];
   createJournalEntry: (entry: JournalEntry) => void;
   getAccountBalance: (accountId: string) => number;
@@ -94,6 +100,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [payments, setPayments] = useLocalStorage<Payment[]>(companyKey('payments'), []);
   const [accounts, setAccounts] = useLocalStorage<Account[]>(companyKey('accounts'), DEFAULT_ACCOUNTS);
   const [journalEntries, setJournalEntries] = useLocalStorage<JournalEntry[]>(companyKey('journal_entries'), []);
+  const [vouchers, setVouchers] = useLocalStorage<Voucher[]>(companyKey('vouchers'), []);
   const [settings, setSettings] = useLocalStorage<BusinessSettings>(companyKey('settings'), defaultSettings);
 
   // Client operations
@@ -137,6 +144,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Journal operations
   const createJournalEntry = (entry: JournalEntry) => setJournalEntries((prev) => [...prev, entry]);
+
+  // Voucher operations
+  const addVoucher = (voucher: Voucher) => setVouchers((prev) => [...prev, voucher]);
+  const generateVoucherNumber = (type: string) => {
+    const prefix = type.toUpperCase().replace(/_/g, '-');
+    const year = new Date().getFullYear();
+    const count = vouchers.filter((v) => v.type === type).length + 1;
+    return `${prefix}-${year}-${count.toString().padStart(3, '0')}`;
+  };
   
   const getAccountBalance = (accountId: string) => {
     let balance = 0;
@@ -173,14 +189,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
 
     try {
-      window.localStorage.removeItem(`app_clients_${id}`);
-      window.localStorage.removeItem(`app_quotations_${id}`);
-      window.localStorage.removeItem(`app_invoices_${id}`);
-      window.localStorage.removeItem(`app_purchase_invoices_${id}`);
-      window.localStorage.removeItem(`app_payments_${id}`);
-      window.localStorage.removeItem(`app_accounts_${id}`);
-      window.localStorage.removeItem(`app_journal_entries_${id}`);
-      window.localStorage.removeItem(`app_settings_${id}`);
+      const keys = ['clients', 'quotations', 'invoices', 'purchase_invoices', 'payments', 'accounts', 'journal_entries', 'settings', 'vouchers'];
+      keys.forEach(k => window.localStorage.removeItem(`app_${k}_${id}`));
     } catch (error) {
       console.warn('Failed to remove company data', error);
     }
@@ -216,6 +226,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         payments, addPayment, getPaymentsByInvoice, getPaymentsByClient,
         accounts, setAccounts, addAccount, deleteAccount,
         journalEntries, createJournalEntry, getAccountBalance,
+        vouchers, addVoucher, generateVoucherNumber,
         settings, setSettings,
         generateQuotationNumber, generateInvoiceNumber,
       }}

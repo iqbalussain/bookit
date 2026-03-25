@@ -52,7 +52,7 @@ export default function LoanGivenVoucher() {
 
     createJournalEntry({
       id: crypto.randomUUID(), date, reference: voucherNumber,
-      referenceType: 'loan_given', referenceId: voucherId,
+      referenceType: 'loan_given' as const, referenceId: voucherId,
       description: `Loan given to ${party?.name}`,
       lines: [
         { accountId: 'acc-1200', debit: amount, credit: 0 },

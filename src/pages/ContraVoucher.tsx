@@ -64,7 +64,7 @@ export default function ContraVoucher() {
 
     createJournalEntry({
       id: crypto.randomUUID(), date, reference: voucherNumber,
-      referenceType: 'contra', referenceId: voucherId,
+      referenceType: 'contra' as const, referenceId: voucherId,
       description: `Contra: ${fromAccount?.name} → ${toAccount?.name}`,
       lines: [
         { accountId: toAccountId, debit: amount, credit: 0 },
