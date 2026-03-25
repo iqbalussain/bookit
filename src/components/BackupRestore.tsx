@@ -54,14 +54,14 @@ export default function BackupRestore() {
 
   const handleRestore = async () => {
     try {
-      const result = await window.electronAPI.showOpenDialog({
+      const result = await window.electronAPI!.showOpenDialog({
         title: 'Select Database Backup',
         filters: [{ name: 'Database Files', extensions: ['db'] }],
         properties: ['openFile']
       });
 
       if (!result.canceled && result.filePaths.length > 0) {
-        await window.electronAPI.restore(result.filePaths[0]);
+        await window.electronAPI!.restore(result.filePaths[0]);
         toast({
           title: 'Restore complete!',
           description: 'Please restart the application for changes to take effect.',
