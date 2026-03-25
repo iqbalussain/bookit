@@ -29,14 +29,14 @@ export default function BackupRestore() {
 
   const handleBackup = async () => {
     try {
-      const result = await window.electronAPI.showSaveDialog({
+      const result = await window.electronAPI!.showSaveDialog({
         title: 'Save Database Backup',
         defaultPath: `${companyName.replace(/\s+/g, '-')}-backup-${new Date().toISOString().split('T')[0]}.db`,
         filters: [{ name: 'Database Files', extensions: ['db'] }]
       });
 
       if (!result.canceled && result.filePath) {
-        await window.electronAPI.backup(result.filePath);
+        await window.electronAPI!.backup(result.filePath);
         toast({
           title: 'Backup saved successfully!',
           description: `Database backed up to: ${result.filePath}`,
