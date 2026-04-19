@@ -1,12 +1,30 @@
 import { ReactNode, useState, useEffect, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Button } from '@/components/ui/button';
+import { useTheme } from 'next-themes';
 import {
-  LayoutDashboard, FileText, Receipt, Users, Settings, ShoppingCart,
-  BookOpen, BarChart3, Menu, X, Wallet,
+  LayoutDashboard,
+  FileText,
+  Receipt,
+  Users,
+  Settings,
+  ShoppingCart,
+  BookOpen,
+  BarChart3,
+  Menu,
+  X,
+  Wallet,
+  Plus,
+  Sun,
+  Moon,
+  ArrowRight,
 } from 'lucide-react';
 
-interface AppLayoutProps { children: ReactNode; }
+interface AppLayoutProps {
+  children: ReactNode;
+}
 
 const navItems = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -16,129 +34,269 @@ const navItems = [
   { name: 'Vouchers', href: '/vouchers', icon: Wallet },
   { name: 'Parties', href: '/clients', icon: Users },
   { name: 'Accounts', href: '/accounts', icon: BookOpen },
-  { name: 'Reports', href: '/reports/pnl', icon: BarChart3 },
   { name: 'Settings', href: '/settings', icon: Settings },
+];
+
+const reportSubmenuItems = [
+  { name: 'Profit & Loss', href: '/reports/pnl', icon: BarChart3 },
+  { name: 'Balance Sheet', href: '/reports/balance-sheet', icon: BarChart3 },
+  { name: 'Trial Balance', href: '/reports/trial-balance', icon: BarChart3 },
+  { name: 'Aging Report', href: '/reports/aging', icon: BarChart3 },
+];
+
+const quickActions = [
+  { name: 'New Quote', href: '/quotations/new', icon: FileText },
+  { name: 'New Invoice', href: '/invoices/new', icon: Receipt },
+  { name: 'Receive Payment', href: '/payments', icon: Wallet },
+  { name: 'Add Client', href: '/clients', icon: Users },
 ];
 
 export function AppLayout({ children }: AppLayoutProps) {
   const location = useLocation();
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [reportsOpen, setReportsOpen] = useState(location.pathname.startsWith('/reports'));
+  const [actionDockOpen, setActionDockOpen] = useState(false);
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
 
-  // Close on route change
-  useEffect(() => { setMenuOpen(false); }, [location.pathname]);
-
-  // Close on Escape
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenuOpen(false); };
-    if (menuOpen) window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [menuOpen]);
+    setMounted(true);
+  }, []);
 
-  const toggle = useCallback(() => setMenuOpen(p => !p), []);
-  const itemCount = navItems.length;
-  const radius = 150;
-  const mobileRadius = 120;
+  useEffect(() => {
+    setReportsOpen(location.pathname.startsWith('/reports'));
+  }, [location.pathname]);
+
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [location.pathname]);
+
+  const toggleTheme = useCallback(() => {
+    setTheme(theme === 'dark' ? 'light' : 'dark');
+  }, [setTheme, theme]);
+
+  const toggleActionDock = useCallback(() => {
+    setActionDockOpen((prev) => !prev);
+  }, []);
+
+  const getIsActive = (href: string | null) => {
+    if (!href) return false;
+    return location.pathname === href || (href !== '/' && location.pathname.startsWith(href));
+  };
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Minimal Header */}
-      <header className="sticky top-0 z-30 flex h-12 items-center gap-3 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-3 lg:px-4">
-        <Link to="/" className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Receipt className="h-4 w-4" />
-          </div>
-          <span className="font-semibold text-sm">SmartBusiness</span>
-        </Link>
-        <div className="flex-1" />
-        <div className="text-xs text-muted-foreground hidden sm:block">
-          {new Date().toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric' })}
-        </div>
-      </header>
+    <div className="min-h-screen bg-background text-foreground">
+      <div className="lg:flex lg:min-h-screen">
+        <aside className="hidden lg:flex lg:w-80 shrink-0 flex-col border-r border-border/70 bg-sidebar/95 p-6 shadow-xl shadow-black/5 backdrop-blur-xl">
+          <Link to="/" className="mb-8 flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-3xl bg-primary text-primary-foreground shadow-lg shadow-primary/20">
+              <Receipt className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">BookIt OS</p>
+              <p className="text-lg font-semibold tracking-tight">Business HQ</p>
+            </div>
+          </Link>
 
-      {/* Main content — full width now */}
-      <main className="flex-1 p-3 lg:p-6 pb-24">{children}</main>
+          <div className="space-y-5">
+            <div className="rounded-3xl border border-border/70 bg-white/85 p-4 shadow-sm shadow-black/5 ring-1 ring-black/5 backdrop-blur-xl dark:bg-slate-950/75 dark:ring-white/10">
+              <p className="text-[11px] uppercase tracking-[0.3em] text-muted-foreground">Workspace</p>
+              <p className="mt-2 text-sm font-semibold text-foreground">Modern business operations and financial intelligence.</p>
+            </div>
 
-      {/* Radial Menu Overlay */}
-      {menuOpen && (
-        <div
-          className="fixed inset-0 z-[60] bg-background/80 backdrop-blur-md"
-          onClick={() => setMenuOpen(false)}
-        />
-      )}
+            <nav className="space-y-2">
+              {navItems.map((item) => {
+                const active = getIsActive(item.href);
+                return (
+                  <Link
+                    key={item.name}
+                    to={item.href || '/'}
+                    className={cn(
+                      'group flex items-center gap-3 rounded-3xl px-4 py-3 transition-all duration-200',
+                      active
+                        ? 'bg-primary text-primary-foreground shadow-primary/15 ring-1 ring-primary/20'
+                        : 'border border-border/50 bg-background text-foreground hover:border-primary/70 hover:bg-primary/10',
+                    )}
+                  >
+                    <item.icon className="h-4 w-4" />
+                    <span className="text-sm font-medium">{item.name}</span>
+                  </Link>
+                );
+              })}
 
-      {/* Radial nav items */}
-      <div className="fixed bottom-6 right-6 z-[70] lg:bottom-8 lg:right-8">
-        {navItems.map((item, index) => {
-          const isActive = location.pathname === item.href ||
-            (item.href !== '/' && location.pathname.startsWith(item.href));
-
-          // Semicircle arc from ~200° to ~340° (upper-left quadrant area)
-          const angleStart = 190;
-          const angleEnd = 350;
-          const angle = angleStart + (index / (itemCount - 1)) * (angleEnd - angleStart);
-          const rad = (angle * Math.PI) / 180;
-
-          const useRadius = typeof window !== 'undefined' && window.innerWidth < 1024 ? mobileRadius : radius;
-          const x = Math.cos(rad) * useRadius;
-          const y = Math.sin(rad) * useRadius;
-
-          return (
-            <Link
-              key={item.name}
-              to={item.href}
-              className={cn(
-                'absolute flex flex-col items-center justify-center transition-all duration-300 ease-out',
-                menuOpen
-                  ? 'opacity-100 scale-100'
-                  : 'opacity-0 scale-0 pointer-events-none'
-              )}
-              style={{
-                transitionDelay: menuOpen ? `${index * 35}ms` : '0ms',
-                transform: menuOpen
-                  ? `translate(${x}px, ${y}px) scale(1)`
-                  : 'translate(0px, 0px) scale(0)',
-                left: '50%',
-                top: '50%',
-                marginLeft: '-24px',
-                marginTop: '-24px',
-              }}
-            >
-              <div
-                className={cn(
-                  'flex h-12 w-12 items-center justify-center rounded-full shadow-lg transition-all duration-200',
-                  isActive
-                    ? 'bg-primary text-primary-foreground shadow-primary/40 ring-2 ring-primary/20'
-                    : 'bg-card text-foreground border border-border hover:bg-primary hover:text-primary-foreground hover:shadow-primary/30'
+              <div className="rounded-3xl border border-border/70 bg-background/90 p-3 shadow-sm shadow-black/5">
+                <button
+                  type="button"
+                  onClick={() => setReportsOpen((prev) => !prev)}
+                  className="flex w-full items-center justify-between gap-2 text-sm font-medium text-foreground"
+                >
+                  <span className="flex items-center gap-2">
+                    <BarChart3 className="h-4 w-4" />
+                    Reports
+                  </span>
+                  <ArrowRight className={cn('h-4 w-4 transition-transform duration-200', reportsOpen && 'rotate-90')} />
+                </button>
+                {reportsOpen && (
+                  <div className="mt-3 space-y-2 pl-2">
+                    {reportSubmenuItems.map((item) => (
+                      <Link
+                        key={item.name}
+                        to={item.href}
+                        className={cn(
+                          'flex items-center gap-2 rounded-2xl px-3 py-2 text-sm transition-colors',
+                          getIsActive(item.href)
+                            ? 'bg-primary/10 text-primary'
+                            : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                        )}
+                      >
+                        <item.icon className="h-4 w-4" />
+                        {item.name}
+                      </Link>
+                    ))}
+                  </div>
                 )}
-              >
-                <item.icon className="h-5 w-5" />
               </div>
-              <span
-                className={cn(
-                  'mt-1 text-[10px] font-semibold whitespace-nowrap select-none',
-                  isActive ? 'text-primary' : 'text-foreground'
-                )}
-              >
-                {item.name}
-              </span>
-            </Link>
-          );
-        })}
+            </nav>
+          </div>
 
-        {/* Trigger FAB */}
-        <button
-          onClick={toggle}
-          className={cn(
-            'relative flex h-14 w-14 items-center justify-center rounded-full shadow-xl transition-all duration-300 z-10',
-            'bg-primary text-primary-foreground',
-            menuOpen
-              ? 'rotate-90 bg-destructive shadow-destructive/40'
-              : 'hover:shadow-primary/50 hover:scale-105'
+          <div className="mt-auto rounded-3xl border border-border/60 bg-white/80 p-4 shadow-sm shadow-black/5 backdrop-blur-xl dark:bg-slate-950/70 dark:border-white/10">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.28em] text-muted-foreground">Theme</p>
+                <p className="mt-1 text-sm font-semibold">Premium glass mode</p>
+              </div>
+              <button
+                type="button"
+                onClick={toggleTheme}
+                className="flex h-11 w-11 items-center justify-center rounded-2xl border border-border/70 bg-card text-foreground shadow-sm transition hover:bg-primary hover:text-primary-foreground"
+              >
+                {mounted && theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+        </aside>
+
+        <div className="flex-1">
+          <header className="sticky top-0 z-30 border-b border-border/70 bg-background/95 px-4 py-4 backdrop-blur-xl lg:px-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-border/70 bg-card text-foreground shadow-sm transition hover:border-primary hover:text-primary"
+                  onClick={() => setSidebarOpen(true)}
+                >
+                  <Menu className="h-5 w-5" />
+                </button>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">Premium Operations</p>
+                  <h2 className="text-xl font-semibold">Enterprise-grade business dashboard</h2>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Button asChild size="sm" variant="secondary">
+                  <Link to="/quotations/new" className="flex items-center gap-2">
+                    <FileText className="h-4 w-4" /> New Quote
+                  </Link>
+                </Button>
+                <Button asChild size="sm">
+                  <Link to="/invoices/new" className="flex items-center gap-2">
+                    <Receipt className="h-4 w-4" /> New Invoice
+                  </Link>
+                </Button>
+              </div>
+            </div>
+          </header>
+
+          {sidebarOpen && (
+            <div className="fixed inset-0 z-50 flex items-start justify-start bg-black/30 p-4 lg:hidden">
+              <div className="w-full max-w-sm rounded-3xl border border-border/60 bg-background p-6 shadow-2xl">
+                <div className="mb-6 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">Menu</p>
+                    <p className="text-lg font-semibold">Navigation</p>
+                  </div>
+                  <button type="button" onClick={() => setSidebarOpen(false)} className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-border/70 bg-card text-foreground">
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+                <nav className="space-y-2">
+                  {navItems.map((item) => (
+                    <Link
+                      key={item.name}
+                      to={item.href || '/'}
+                      className={cn(
+                        'flex items-center gap-3 rounded-3xl px-4 py-3 transition',
+                        getIsActive(item.href)
+                          ? 'bg-primary text-primary-foreground'
+                          : 'border border-border/70 bg-card text-foreground hover:bg-primary/10',
+                      )}
+                      onClick={() => setSidebarOpen(false)}
+                    >
+                      <item.icon className="h-4 w-4" />
+                      {item.name}
+                    </Link>
+                  ))}
+                </nav>
+              </div>
+            </div>
           )}
-          aria-label={menuOpen ? 'Close navigation' : 'Open navigation'}
-        >
-          {menuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-        </button>
+
+          <main className="p-4 sm:p-6 lg:p-8">{children}</main>
+        </div>
+      </div>
+
+      <div className="fixed bottom-4 left-1/2 z-40 w-full max-w-4xl -translate-x-1/2 px-4">
+        <div className="rounded-full border border-border/70 bg-card/95 px-3 py-3 shadow-2xl shadow-black/10 backdrop-blur-xl">
+          <div className="hidden sm:flex items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {quickActions.map((action) => (
+                <Link
+                  key={action.name}
+                  to={action.href}
+                  className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/80 px-4 py-2 text-sm font-medium text-foreground transition hover:border-primary hover:bg-primary/10"
+                >
+                  <action.icon className="h-4 w-4" />
+                  {action.name}
+                </Link>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={toggleActionDock}
+              className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_18px_70px_rgba(59,130,246,0.24)] ring-1 ring-primary/30 transition-transform duration-300 hover:-translate-y-0.5 hover:shadow-[0_20px_90px_rgba(59,130,246,0.28)] animate-pulse-glow"
+              aria-label="Toggle quick actions"
+            >
+              <Plus className="h-6 w-6" />
+            </button>
+          </div>
+
+          <div className="flex sm:hidden items-center justify-center">
+            <button
+              type="button"
+              onClick={toggleActionDock}
+              className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_18px_70px_rgba(59,130,246,0.24)] ring-1 ring-primary/30 transition-transform duration-300 hover:-translate-y-0.5 hover:shadow-[0_20px_90px_rgba(59,130,246,0.28)] animate-pulse-glow"
+              aria-label="Open quick actions"
+            >
+              <Plus className="h-6 w-6" />
+            </button>
+          </div>
+
+          {actionDockOpen && (
+            <div className="mt-3 flex flex-wrap items-center justify-center gap-2 sm:hidden">
+              {quickActions.map((action) => (
+                <Link
+                  key={action.name}
+                  to={action.href}
+                  className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/90 px-4 py-2 text-sm font-medium text-foreground transition hover:border-primary hover:bg-primary/10"
+                >
+                  <action.icon className="h-4 w-4" />
+                  {action.name}
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

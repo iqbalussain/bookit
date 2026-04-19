@@ -72,6 +72,11 @@ interface AppContextType {
   settings: BusinessSettings;
   setSettings: (settings: BusinessSettings | ((prev: BusinessSettings) => BusinessSettings)) => void;
   
+  // Audit & activity log
+  auditLog: AuditEntry[];
+  addAuditEntry: (entry: Omit<AuditEntry, 'id' | 'createdAt'>) => void;
+  getRecentAuditLog: (limit?: number) => AuditEntry[];
+
   // Utility functions
   generateQuotationNumber: () => string;
   generateInvoiceNumber: () => string;
@@ -83,6 +88,7 @@ const defaultSettings: BusinessSettings = {
   phone: '',
   address: '',
   currency: 'INR',
+  theme: 'system',
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -102,35 +108,178 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [journalEntries, setJournalEntries] = useLocalStorage<JournalEntry[]>(companyKey('journal_entries'), []);
   const [vouchers, setVouchers] = useLocalStorage<Voucher[]>(companyKey('vouchers'), []);
   const [settings, setSettings] = useLocalStorage<BusinessSettings>(companyKey('settings'), defaultSettings);
+  const [auditLog, setAuditLog] = useLocalStorage<AuditEntry[]>(companyKey('audit_log'), []);
+
+  const addAuditEntry = (entry: Omit<AuditEntry, 'id' | 'createdAt'>) => {
+    const auditEntry: AuditEntry = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      createdAt: new Date().toISOString(),
+      ...entry,
+    };
+    setAuditLog((prev) => [auditEntry, ...prev]);
+  };
+
+  const getRecentAuditLog = (limit = 10) => auditLog.slice(0, limit);
 
   // Client operations
-  const addClient = (client: Client) => setClients((prev) => [...prev, client]);
-  const updateClient = (client: Client) => setClients((prev) => prev.map((c) => (c.id === client.id ? client : c)));
-  const deleteClient = (id: string) => setClients((prev) => prev.filter((c) => c.id !== id));
+  const addClient = (client: Client) => {
+    setClients((prev) => [...prev, client]);
+    addAuditEntry({
+      type: 'client',
+      action: 'created',
+      target: client.name,
+      details: `Created ${client.type}`,
+    });
+  };
+
+  const updateClient = (client: Client) => {
+    setClients((prev) => prev.map((c) => (c.id === client.id ? client : c)));
+    addAuditEntry({
+      type: 'client',
+      action: 'updated',
+      target: client.name,
+      details: `Updated client profile`,
+    });
+  };
+
+  const deleteClient = (id: string) => {
+    const existing = clients.find((c) => c.id === id);
+    setClients((prev) => prev.filter((c) => c.id !== id));
+    if (existing) {
+      addAuditEntry({
+        type: 'client',
+        action: 'deleted',
+        target: existing.name,
+        details: `Removed customer/vendor profile`,
+      });
+    }
+  };
   const getClient = (id: string) => clients.find((c) => c.id === id);
   const getCustomers = () => clients.filter((c) => c.type === 'customer' || c.type === 'both');
   const getVendors = () => clients.filter((c) => c.type === 'vendor' || c.type === 'both');
 
   // Quotation operations
-  const addQuotation = (quotation: Quotation) => setQuotations((prev) => [...prev, quotation]);
-  const updateQuotation = (quotation: Quotation) => setQuotations((prev) => prev.map((q) => (q.id === quotation.id ? quotation : q)));
-  const deleteQuotation = (id: string) => setQuotations((prev) => prev.filter((q) => q.id !== id));
+  const addQuotation = (quotation: Quotation) => {
+    setQuotations((prev) => [...prev, quotation]);
+    addAuditEntry({
+      type: 'quotation',
+      action: 'created',
+      target: quotation.number,
+      details: `Quotation saved for client ${quotation.clientId}`,
+      value: quotation.netTotal,
+    });
+  };
+
+  const updateQuotation = (quotation: Quotation) => {
+    setQuotations((prev) => prev.map((q) => (q.id === quotation.id ? quotation : q)));
+    addAuditEntry({
+      type: 'quotation',
+      action: 'updated',
+      target: quotation.number,
+      details: 'Quotation details updated',
+      value: quotation.netTotal,
+    });
+  };
+
+  const deleteQuotation = (id: string) => {
+    const existing = quotations.find((q) => q.id === id);
+    setQuotations((prev) => prev.filter((q) => q.id !== id));
+    if (existing) {
+      addAuditEntry({
+        type: 'quotation',
+        action: 'deleted',
+        target: existing.number,
+        details: 'Quotation removed',
+      });
+    }
+  };
   const getQuotation = (id: string) => quotations.find((q) => q.id === id);
 
   // Invoice operations
-  const addInvoice = (invoice: Invoice) => setInvoices((prev) => [...prev, invoice]);
-  const updateInvoice = (invoice: Invoice) => setInvoices((prev) => prev.map((i) => (i.id === invoice.id ? invoice : i)));
-  const deleteInvoice = (id: string) => setInvoices((prev) => prev.filter((i) => i.id !== id));
+  const addInvoice = (invoice: Invoice) => {
+    setInvoices((prev) => [...prev, invoice]);
+    addAuditEntry({
+      type: 'invoice',
+      action: 'created',
+      target: invoice.number,
+      details: `Sales invoice created for client ${invoice.clientId}`,
+      value: invoice.netTotal,
+    });
+  };
+
+  const updateInvoice = (invoice: Invoice) => {
+    setInvoices((prev) => prev.map((i) => (i.id === invoice.id ? invoice : i)));
+    addAuditEntry({
+      type: 'invoice',
+      action: 'updated',
+      target: invoice.number,
+      details: `Invoice status updated to ${invoice.status}`,
+      value: invoice.netTotal,
+    });
+  };
+
+  const deleteInvoice = (id: string) => {
+    const existing = invoices.find((i) => i.id === id);
+    setInvoices((prev) => prev.filter((i) => i.id !== id));
+    if (existing) {
+      addAuditEntry({
+        type: 'invoice',
+        action: 'deleted',
+        target: existing.number,
+        details: 'Sales invoice deleted',
+      });
+    }
+  };
   const getInvoice = (id: string) => invoices.find((i) => i.id === id);
 
   // Purchase Invoice operations
-  const addPurchaseInvoice = (pi: PurchaseInvoice) => setPurchaseInvoices((prev) => [...prev, pi]);
-  const updatePurchaseInvoice = (pi: PurchaseInvoice) => setPurchaseInvoices((prev) => prev.map((p) => (p.id === pi.id ? pi : p)));
-  const deletePurchaseInvoice = (id: string) => setPurchaseInvoices((prev) => prev.filter((p) => p.id !== id));
+  const addPurchaseInvoice = (pi: PurchaseInvoice) => {
+    setPurchaseInvoices((prev) => [...prev, pi]);
+    addAuditEntry({
+      type: 'purchase_invoice',
+      action: 'created',
+      target: pi.number,
+      details: `Purchase invoice created for vendor ${pi.vendorId}`,
+      value: pi.netTotal,
+    });
+  };
+
+  const updatePurchaseInvoice = (pi: PurchaseInvoice) => {
+    setPurchaseInvoices((prev) => prev.map((p) => (p.id === pi.id ? pi : p)));
+    addAuditEntry({
+      type: 'purchase_invoice',
+      action: 'updated',
+      target: pi.number,
+      details: `Purchase invoice status updated to ${pi.status}`,
+      value: pi.netTotal,
+    });
+  };
+
+  const deletePurchaseInvoice = (id: string) => {
+    const existing = purchaseInvoices.find((p) => p.id === id);
+    setPurchaseInvoices((prev) => prev.filter((p) => p.id !== id));
+    if (existing) {
+      addAuditEntry({
+        type: 'purchase_invoice',
+        action: 'deleted',
+        target: existing.number,
+        details: 'Purchase invoice deleted',
+      });
+    }
+  };
   const getPurchaseInvoice = (id: string) => purchaseInvoices.find((p) => p.id === id);
 
   // Payment operations
-  const addPayment = (payment: Payment) => setPayments((prev) => [...prev, payment]);
+  const addPayment = (payment: Payment) => {
+    setPayments((prev) => [...prev, payment]);
+    addAuditEntry({
+      type: 'payment',
+      action: 'processed',
+      target: payment.reference || payment.invoiceId,
+      details: `Payment recorded via ${payment.method}`,
+      value: payment.amount,
+    });
+  };
   const getPaymentsByInvoice = (invoiceId: string) => payments.filter((p) => p.invoiceId === invoiceId);
   const getPaymentsByClient = (clientId: string) => {
     const clientInvoiceIds = invoices.filter((i) => i.clientId === clientId).map((i) => i.id);
@@ -139,14 +288,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   // Account operations
-  const addAccount = (account: Account) => setAccounts((prev) => [...prev, account]);
+  const addAccount = (account: Account) => {
+    setAccounts((prev) => [...prev, account]);
+    addAuditEntry({
+      type: 'account',
+      action: 'created',
+      target: account.name,
+      details: 'Chart of accounts item added',
+    });
+  };
   const deleteAccount = (id: string) => setAccounts((prev) => prev.filter((a) => a.id !== id || a.isSystem));
 
   // Journal operations
-  const createJournalEntry = (entry: JournalEntry) => setJournalEntries((prev) => [...prev, entry]);
+  const createJournalEntry = (entry: JournalEntry) => {
+    setJournalEntries((prev) => [...prev, entry]);
+    addAuditEntry({
+      type: 'account',
+      action: 'created',
+      target: entry.reference,
+      details: `Journal entry recorded for ${entry.referenceType}`,
+    });
+  };
 
   // Voucher operations
-  const addVoucher = (voucher: Voucher) => setVouchers((prev) => [...prev, voucher]);
+  const addVoucher = (voucher: Voucher) => {
+    setVouchers((prev) => [...prev, voucher]);
+    addAuditEntry({
+      type: 'voucher',
+      action: 'created',
+      target: voucher.number,
+      details: `Voucher created for ${voucher.partyName}`,
+      value: voucher.amount,
+    });
+  };
   const generateVoucherNumber = (type: string) => {
     const prefix = type.toUpperCase().replace(/_/g, '-');
     const year = new Date().getFullYear();
@@ -228,6 +402,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         journalEntries, createJournalEntry, getAccountBalance,
         vouchers, addVoucher, generateVoucherNumber,
         settings, setSettings,
+        auditLog, addAuditEntry, getRecentAuditLog,
         generateQuotationNumber, generateInvoiceNumber,
       }}
     >

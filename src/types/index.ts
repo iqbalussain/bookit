@@ -23,6 +23,9 @@ export interface LineItem {
   quantity: number;
   rate: number;
   total: number;
+  cost?: number;
+  stock?: number;
+  reorderLevel?: number;
 }
 
 // Quotation types
@@ -117,7 +120,7 @@ export interface Voucher {
   narration: string;
   method: string;
   reference?: string;
-  details?: any;
+  details?: Record<string, unknown>;
   createdAt: string;
 }
 
@@ -137,6 +140,16 @@ export interface JournalLine {
   debit: number;
   credit: number;
   description?: string;
+}
+
+export interface AuditEntry {
+  id: string;
+  type: 'client' | 'quotation' | 'invoice' | 'purchase_invoice' | 'payment' | 'voucher' | 'account' | 'settings';
+  action: 'created' | 'updated' | 'deleted' | 'processed' | 'saved' | 'approved' | 'paid';
+  target: string;
+  value?: number;
+  details?: string;
+  createdAt: string;
 }
 
 // Default Chart of Accounts
@@ -167,6 +180,7 @@ export interface BusinessSettings {
   logo?: string;
   currency: 'INR' | 'USD' | 'EUR' | 'GBP' | 'OMR';
   taxNumber?: string;
+  theme?: 'light' | 'dark' | 'system';
 }
 
 // Currency symbols
@@ -181,22 +195,22 @@ export const currencySymbols: Record<BusinessSettings['currency'], string> = {
 // Electron API types
 export interface ElectronAPI {
   // Database operations
-  query: (sql: string, params?: any[]) => Promise<any[]>;
-  getParties: () => Promise<any[]>;
-  saveInvoice: (invoice: any) => Promise<any>;
-  getInvoices: () => Promise<any[]>;
-  saveQuotation: (quotation: any) => Promise<any>;
-  getQuotations: () => Promise<any[]>;
-  savePurchaseInvoice: (purchaseInvoice: any) => Promise<any>;
-  getPurchaseInvoices: () => Promise<any[]>;
-  savePayment: (payment: any) => Promise<any>;
-  getPayments: () => Promise<any[]>;
-  getAccounts: () => Promise<any[]>;
-  saveAccount: (account: any) => Promise<any>;
-  getBusinessSettings: () => Promise<any>;
-  saveBusinessSettings: (settings: any) => Promise<void>;
-  showSaveDialog: (options: any) => Promise<any>;
-  showOpenDialog: (options: any) => Promise<any>;
+  query: (sql: string, params?: unknown[]) => Promise<unknown[]>;
+  getParties: () => Promise<unknown[]>;
+  saveInvoice: (invoice: unknown) => Promise<unknown>;
+  getInvoices: () => Promise<unknown[]>;
+  saveQuotation: (quotation: unknown) => Promise<unknown>;
+  getQuotations: () => Promise<unknown[]>;
+  savePurchaseInvoice: (purchaseInvoice: unknown) => Promise<unknown>;
+  getPurchaseInvoices: () => Promise<unknown[]>;
+  savePayment: (payment: unknown) => Promise<unknown>;
+  getPayments: () => Promise<unknown[]>;
+  getAccounts: () => Promise<unknown[]>;
+  saveAccount: (account: unknown) => Promise<unknown>;
+  getBusinessSettings: () => Promise<unknown>;
+  saveBusinessSettings: (settings: unknown) => Promise<void>;
+  showSaveDialog: (options: unknown) => Promise<unknown>;
+  showOpenDialog: (options: unknown) => Promise<unknown>;
   getDbPath: () => Promise<string>;
   backup: (destinationPath: string) => Promise<void>;
   restore: (backupPath: string) => Promise<void>;

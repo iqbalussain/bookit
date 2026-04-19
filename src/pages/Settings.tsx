@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
+import { useTheme } from 'next-themes';
 import type { BusinessSettings } from '@/types';
 import { Building2, Save, Upload, Trash2, Globe, Mail, Phone, MapPin, FileText, RefreshCw, Info, Pencil, Check, X, Plus } from 'lucide-react';
 import BackupRestore from '@/components/BackupRestore';
@@ -29,6 +30,7 @@ export default function Settings() {
     updateCompany,
     deleteCompany,
   } = useApp();
+  const { theme, setTheme } = useTheme();
 
   const { toast } = useToast();
   const [companyName, setCompanyName] = useState('');
@@ -51,6 +53,12 @@ export default function Settings() {
     };
     loadVersion();
   }, []);
+
+  useEffect(() => {
+    if (settings.theme) {
+      setTheme(settings.theme);
+    }
+  }, [settings.theme, setTheme]);
 
   const handleCheckUpdates = async () => {
     if (!window.electronAPI?.update) {
@@ -366,7 +374,7 @@ export default function Settings() {
               Preferences
             </CardTitle>
           </CardHeader>
-          <CardContent className="px-4 pb-4">
+          <CardContent className="px-4 pb-4 space-y-4">
             <div className="space-y-1.5 max-w-xs">
               <Label htmlFor="currency" className="text-xs">Default Currency</Label>
               <Select value={settings.currency} onValueChange={(value) => handleChange('currency', value as BusinessSettings['currency'])}>
@@ -379,6 +387,25 @@ export default function Settings() {
                   <SelectItem value="EUR">€ EUR - Euro</SelectItem>
                   <SelectItem value="GBP">£ GBP - British Pound</SelectItem>
                   <SelectItem value="OMR">ر.ع. OMR - Omani Rial</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5 max-w-xs">
+              <Label htmlFor="theme" className="text-xs">App Theme</Label>
+              <Select
+                value={settings.theme || 'system'}
+                onValueChange={(value) => {
+                  setSettings((prev) => ({ ...prev, theme: value as BusinessSettings['theme'] }));
+                  setTheme(value as 'light' | 'dark' | 'system');
+                }}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="Select theme" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="system">System</SelectItem>
+                  <SelectItem value="light">Light</SelectItem>
+                  <SelectItem value="dark">Dark</SelectItem>
                 </SelectContent>
               </Select>
             </div>
