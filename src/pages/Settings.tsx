@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { useTheme } from 'next-themes';
 import type { BusinessSettings } from '@/types';
@@ -408,6 +409,30 @@ export default function Settings() {
                   <SelectItem value="dark">Dark</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="flex items-center justify-between rounded-md border p-3 max-w-md">
+              <div>
+                <Label className="text-xs">VAT Enabled</Label>
+                <p className="text-[10px] text-muted-foreground">Apply VAT on quotations, invoices & purchases by default</p>
+              </div>
+              <Switch
+                checked={settings.vatEnabled ?? true}
+                onCheckedChange={(v) => setSettings((prev) => ({ ...prev, vatEnabled: v }))}
+              />
+            </div>
+            <div className="space-y-1.5 max-w-xs">
+              <Label htmlFor="defaultVat" className="text-xs">Default VAT %</Label>
+              <Input
+                id="defaultVat"
+                type="number"
+                step="0.01"
+                value={settings.defaultVatPercentage ?? 5}
+                onChange={(e) => setSettings((prev) => ({ ...prev, defaultVatPercentage: Number(e.target.value) || 0 }))}
+                disabled={!(settings.vatEnabled ?? true)}
+                className="h-9"
+              />
+              <p className="text-[10px] text-muted-foreground">Used when creating new items</p>
             </div>
           </CardContent>
         </Card>
