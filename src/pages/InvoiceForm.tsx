@@ -21,6 +21,7 @@ import { currencySymbols, type Invoice, type LineItem, type InvoiceStatus, type 
 import { Plus, Trash2, Save, ArrowLeft, Send, Download, Share2, Edit2, CreditCard } from 'lucide-react';
 import { generatePDF, shareViaWhatsApp } from '@/lib/documentUtils';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { ItemPicker } from '@/components/ItemPicker';
 
 export default function InvoiceForm() {
   const { id } = useParams();
@@ -33,7 +34,7 @@ export default function InvoiceForm() {
     quotations, updateQuotation,
     clients, addClient, getClient, settings,
     generateInvoiceNumber,
-    createJournalEntry,
+    createJournalEntry, adjustItemStock,
   } = useApp();
 
   const isEditing = id && id !== 'new';
@@ -60,6 +61,8 @@ export default function InvoiceForm() {
   const [tempItem, setTempItem] = useState<LineItem>({ id: '', name: '', description: '', quantity: 1, rate: 0, total: 0 });
 
   const netTotal = useMemo(() => items.reduce((sum, item) => sum + item.total, 0), [items]);
+  const vatTotal = useMemo(() => items.reduce((sum, item) => sum + (item.vatAmount ?? 0), 0), [items]);
+  const grandTotal = netTotal + vatTotal;
   const currentStatus = existingInvoice?.status || 'draft';
 
   const updateItem = (index: number, field: keyof LineItem, value: string | number) => {
@@ -69,8 +72,32 @@ export default function InvoiceForm() {
       if (field === 'quantity' || field === 'rate') {
         item[field] = Number(value) || 0;
         item.total = item.quantity * item.rate;
+        item.vatAmount = item.vatApplicable ? (item.total * (item.vatPercentage ?? 0)) / 100 : 0;
       } else { (item as any)[field] = value; }
       updated[index] = item;
+      return updated;
+    });
+  };
+
+  const selectItemForRow = (index: number, picked: { id: string; name: string; description?: string; rate: number; vatApplicable: boolean; vatPercentage: number; }) => {
+    setItems((prev) => {
+      const updated = [...prev];
+      const cur = updated[index];
+      const qty = cur.quantity || 1;
+      const rate = picked.rate;
+      const total = qty * rate;
+      const vatAmount = picked.vatApplicable ? (total * picked.vatPercentage) / 100 : 0;
+      updated[index] = {
+        ...cur,
+        itemId: picked.id,
+        name: picked.name,
+        description: picked.description ?? cur.description,
+        rate,
+        total,
+        vatApplicable: picked.vatApplicable,
+        vatPercentage: picked.vatPercentage,
+        vatAmount,
+      };
       return updated;
     });
   };
@@ -119,16 +146,19 @@ export default function InvoiceForm() {
     const now = new Date().toISOString();
 
     if (isEditing && existingInvoice) {
-      const updated: Invoice = { ...existingInvoice, clientId, items, netTotal, dueDate, notes, terms, updatedAt: now };
+      const updated: Invoice = { ...existingInvoice, clientId, items, netTotal: grandTotal, dueDate, notes, terms, updatedAt: now };
       updateInvoice(updated);
       toast({ title: 'Invoice updated', description: `${existingInvoice.number} has been updated.` });
     } else {
       const newInvoice: Invoice = {
         id: crypto.randomUUID(), number: generateInvoiceNumber(), clientId,
-        quotationId: sourceQuotation?.id, items, netTotal, status: 'draft', dueDate, notes, terms,
+        quotationId: sourceQuotation?.id, items, netTotal: grandTotal, status: 'draft', dueDate, notes, terms,
         createdAt: now, updatedAt: now,
       };
       addInvoice(newInvoice);
+
+      // Decrement stock for each item that has an itemId
+      items.forEach((li) => { if (li.itemId) adjustItemStock(li.itemId, -li.quantity); });
 
       // Mark source quotation as converted
       if (sourceQuotation) {
@@ -142,8 +172,9 @@ export default function InvoiceForm() {
           referenceType: 'sales_invoice', referenceId: newInvoice.id,
           description: `Sales Invoice ${newInvoice.number}`,
           lines: [
-            { accountId: 'acc-1100', debit: netTotal, credit: 0 },
+            { accountId: 'acc-1100', debit: grandTotal, credit: 0 },
             { accountId: 'acc-4000', debit: 0, credit: netTotal },
+            ...(vatTotal > 0 ? [{ accountId: 'acc-2000', debit: 0, credit: vatTotal }] : []),
           ],
           createdAt: now,
         });
@@ -287,7 +318,13 @@ export default function InvoiceForm() {
                 {items.map((item, index) => (
                   <tr key={item.id} className="border-b last:border-0">
                     <td className="py-2 text-muted-foreground">{index + 1}</td>
-                    <td className="py-2"><Input value={item.name} onChange={(e) => updateItem(index, 'name', e.target.value)} placeholder="Item name" className="h-8" /></td>
+                    <td className="py-2 min-w-[180px]">
+                      <ItemPicker
+                        value={item.itemId}
+                        fallbackName={item.name}
+                        onSelect={(it) => selectItemForRow(index, it)}
+                      />
+                    </td>
                     <td className="py-2"><Input value={item.description} onChange={(e) => updateItem(index, 'description', e.target.value)} placeholder="Description" className="h-8" /></td>
                     <td className="py-2"><Input type="number" min="1" value={item.quantity} onChange={(e) => updateItem(index, 'quantity', e.target.value)} className="h-8 text-right" /></td>
                     <td className="py-2"><Input type="number" min="0" step="0.01" value={item.rate} onChange={(e) => updateItem(index, 'rate', e.target.value)} className="h-8 text-right" /></td>
@@ -313,8 +350,10 @@ export default function InvoiceForm() {
             ))}
           </div>
           <div className="mt-3 flex justify-end">
-            <div className="w-full sm:w-48 rounded-lg bg-primary/10 p-2.5">
-              <div className="flex items-center justify-between text-sm font-bold"><span>Net Total</span><span>{currencySymbol}{netTotal.toLocaleString('en-IN')}</span></div>
+            <div className="w-full sm:w-64 rounded-lg bg-primary/10 p-2.5 space-y-1">
+              <div className="flex items-center justify-between text-xs"><span className="text-muted-foreground">Subtotal</span><span>{currencySymbol}{netTotal.toLocaleString('en-IN')}</span></div>
+              <div className="flex items-center justify-between text-xs"><span className="text-muted-foreground">VAT</span><span>{currencySymbol}{vatTotal.toLocaleString('en-IN')}</span></div>
+              <div className="flex items-center justify-between text-sm font-bold pt-1 border-t"><span>Grand Total</span><span>{currencySymbol}{grandTotal.toLocaleString('en-IN')}</span></div>
             </div>
           </div>
         </CardContent>
