@@ -17,6 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import { currencySymbols, type PurchaseInvoice, type LineItem, type PurchaseInvoiceStatus } from '@/types';
 import { Plus, Trash2, Save, ArrowLeft, Edit2 } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { ItemPicker } from '@/components/ItemPicker';
 
 export default function PurchaseInvoiceForm() {
   const { id } = useParams();
@@ -25,7 +26,7 @@ export default function PurchaseInvoiceForm() {
   const isMobile = useIsMobile();
   const {
     purchaseInvoices, addPurchaseInvoice, updatePurchaseInvoice,
-    getVendors, getClient, settings, generatePurchaseInvoiceNumber, createJournalEntry,
+    getVendors, getClient, settings, generatePurchaseInvoiceNumber, createJournalEntry, adjustItemStock,
   } = useApp();
 
   const isEditing = id && id !== 'new';
@@ -49,15 +50,44 @@ export default function PurchaseInvoiceForm() {
   const [tempItem, setTempItem] = useState<LineItem>({ id: '', name: '', description: '', quantity: 1, rate: 0, total: 0 });
 
   const netTotal = useMemo(() => items.reduce((sum, item) => sum + item.total, 0), [items]);
+  const vatTotal = useMemo(() => items.reduce((sum, item) => sum + (item.vatAmount ?? 0), 0), [items]);
+  const grandTotal = netTotal + vatTotal;
   const currentStatus = existing?.status || 'draft';
 
   const updateItem = (index: number, field: keyof LineItem, value: string | number) => {
     setItems((prev) => {
       const updated = [...prev];
       const item = { ...updated[index] };
-      if (field === 'quantity' || field === 'rate') { item[field] = Number(value) || 0; item.total = item.quantity * item.rate; }
+      if (field === 'quantity' || field === 'rate') {
+        item[field] = Number(value) || 0;
+        item.total = item.quantity * item.rate;
+        item.vatAmount = item.vatApplicable ? (item.total * (item.vatPercentage ?? 0)) / 100 : 0;
+      }
       else { (item as any)[field] = value; }
       updated[index] = item;
+      return updated;
+    });
+  };
+
+  const selectItemForRow = (index: number, picked: { id: string; name: string; description?: string; rate: number; cost?: number; vatApplicable: boolean; vatPercentage: number; }) => {
+    setItems((prev) => {
+      const updated = [...prev];
+      const cur = updated[index];
+      const qty = cur.quantity || 1;
+      const rate = picked.cost ?? picked.rate;
+      const total = qty * rate;
+      const vatAmount = picked.vatApplicable ? (total * picked.vatPercentage) / 100 : 0;
+      updated[index] = {
+        ...cur,
+        itemId: picked.id,
+        name: picked.name,
+        description: picked.description ?? cur.description,
+        rate,
+        total,
+        vatApplicable: picked.vatApplicable,
+        vatPercentage: picked.vatPercentage,
+        vatAmount,
+      };
       return updated;
     });
   };
@@ -86,14 +116,17 @@ export default function PurchaseInvoiceForm() {
 
     const now = new Date().toISOString();
     if (isEditing && existing) {
-      updatePurchaseInvoice({ ...existing, vendorId, items, netTotal, dueDate, notes, terms, updatedAt: now });
+      updatePurchaseInvoice({ ...existing, vendorId, items, netTotal: grandTotal, dueDate, notes, terms, updatedAt: now });
       toast({ title: 'Bill updated', description: `${existing.number} updated.` });
     } else {
       const pi: PurchaseInvoice = {
         id: crypto.randomUUID(), number: generatePurchaseInvoiceNumber(), vendorId,
-        items, netTotal, status: 'draft', dueDate, notes, terms, createdAt: now, updatedAt: now,
+        items, netTotal: grandTotal, status: 'draft', dueDate, notes, terms, createdAt: now, updatedAt: now,
       };
       addPurchaseInvoice(pi);
+
+      // Increment stock for purchased items
+      items.forEach((li) => { if (li.itemId) adjustItemStock(li.itemId, li.quantity); });
 
       // Journal: Debit Expense, Credit A/P
       createJournalEntry({
@@ -102,7 +135,8 @@ export default function PurchaseInvoiceForm() {
         description: `Purchase Invoice ${pi.number}`,
         lines: [
           { accountId: 'acc-5000', debit: netTotal, credit: 0 },
-          { accountId: 'acc-2000', debit: 0, credit: netTotal },
+          ...(vatTotal > 0 ? [{ accountId: 'acc-1100', debit: vatTotal, credit: 0 }] : []),
+          { accountId: 'acc-2000', debit: 0, credit: grandTotal },
         ],
         createdAt: now,
       });
@@ -161,7 +195,13 @@ export default function PurchaseInvoiceForm() {
                 {items.map((item, index) => (
                   <tr key={item.id} className="border-b last:border-0">
                     <td className="py-2 text-muted-foreground">{index + 1}</td>
-                    <td className="py-2"><Input value={item.name} onChange={(e) => updateItem(index, 'name', e.target.value)} placeholder="Item name" className="h-8" /></td>
+                    <td className="py-2 min-w-[180px]">
+                      <ItemPicker
+                        value={item.itemId}
+                        fallbackName={item.name}
+                        onSelect={(it) => selectItemForRow(index, it)}
+                      />
+                    </td>
                     <td className="py-2"><Input value={item.description} onChange={(e) => updateItem(index, 'description', e.target.value)} placeholder="Description" className="h-8" /></td>
                     <td className="py-2"><Input type="number" min="1" value={item.quantity} onChange={(e) => updateItem(index, 'quantity', e.target.value)} className="h-8 text-right" /></td>
                     <td className="py-2"><Input type="number" min="0" step="0.01" value={item.rate} onChange={(e) => updateItem(index, 'rate', e.target.value)} className="h-8 text-right" /></td>
@@ -186,8 +226,10 @@ export default function PurchaseInvoiceForm() {
             ))}
           </div>
           <div className="mt-3 flex justify-end">
-            <div className="w-full sm:w-48 rounded-lg bg-warning/10 p-2.5">
-              <div className="flex items-center justify-between text-sm font-bold"><span>Net Total</span><span>{currencySymbol}{netTotal.toLocaleString('en-IN')}</span></div>
+            <div className="w-full sm:w-64 rounded-lg bg-warning/10 p-2.5 space-y-1">
+              <div className="flex items-center justify-between text-xs"><span className="text-muted-foreground">Subtotal</span><span>{currencySymbol}{netTotal.toLocaleString('en-IN')}</span></div>
+              <div className="flex items-center justify-between text-xs"><span className="text-muted-foreground">VAT</span><span>{currencySymbol}{vatTotal.toLocaleString('en-IN')}</span></div>
+              <div className="flex items-center justify-between text-sm font-bold pt-1 border-t"><span>Grand Total</span><span>{currencySymbol}{grandTotal.toLocaleString('en-IN')}</span></div>
             </div>
           </div>
         </CardContent>
