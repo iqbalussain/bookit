@@ -59,7 +59,7 @@ export default function Settings() {
       }
       const ping = await pingServer(lanUrl);
       if (!ping.ok) {
-        toast({ title: 'Cannot reach server', description: ping.error, variant: 'destructive' });
+        toast({ title: 'Cannot reach server', description: (ping as { error: string }).error, variant: 'destructive' });
         return;
       }
     }
@@ -76,7 +76,7 @@ export default function Settings() {
     setLanStatus(res.ok ? 'ok' : 'fail');
     toast({
       title: res.ok ? 'Connection successful' : 'Connection failed',
-      description: res.ok ? `Server responded at ${new Date(res.time).toLocaleTimeString()}` : res.error,
+      description: res.ok ? `Server responded at ${new Date(res.time).toLocaleTimeString()}` : (res as { error: string }).error,
       variant: res.ok ? 'default' : 'destructive',
     });
   };
