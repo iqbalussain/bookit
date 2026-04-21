@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { currencySymbols } from '@/types';
 import {
   ArrowUpRight, ArrowDownLeft, Receipt, ArrowLeftRight,
-  HandCoins, Landmark, TrendingUp, Clock, Calendar, BookOpen, Package,
+  HandCoins, Landmark, TrendingUp, Clock, Calendar, BookOpen, Package, FileBarChart,
 } from 'lucide-react';
 
 const voucherCards = [
@@ -18,6 +18,7 @@ const voucherCards = [
   { title: 'Loan Received', desc: 'Record loans received', icon: Landmark, color: '#FFA726', href: '/vouchers/loan-received/new' },
   { title: 'Journal', desc: 'Non-cash adjustment entries', icon: BookOpen, color: '#7C83FD', href: '/vouchers/journal' },
   { title: 'Item Report', desc: 'Stock & VAT per item', icon: Package, color: '#26C281', href: '/reports/items' },
+  { title: 'VAT Return', desc: 'Output vs input VAT for filing', icon: FileBarChart, color: '#E96479', href: '/reports/vat' },
 ];
 
 export default function VoucherDashboard() {
