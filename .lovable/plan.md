@@ -1,116 +1,115 @@
 
 
-# Add Journal Voucher, Item Master with VAT, and Item-wise Reporting
+# Bank Details, VAT in PDF, and LAN Multi-User Server
 
-## Overview
-Three connected features:
-1. **Journal Voucher** — non-cash adjustment entries (depreciation, credit asset purchase, corrections)
-2. **Item Master** — central item catalog with per-item VAT settings, replacing free-text item entry
-3. **Item-wise Report** — Tally-style stock & sales/purchase report per item
+## 1. Bank details on Quotation & Invoice PDFs
 
----
+The `bankName` and `bankAccountNumber` fields already exist in `BusinessSettings` and the Settings UI. Only the PDF template is missing them.
 
-## 1. Journal Voucher (non-cash adjustments)
+**Edit `src/lib/documentUtils.ts`** — add a "Payment Details" block above the footer:
 
-**New page**: `src/pages/JournalVoucher.tsx`
-- Form with: Date, Voucher Number (auto: `JV-YYYY-MM-XXX`), Narration
-- **Multi-line debit/credit grid**: each row picks an Account (from Chart of Accounts) + Debit amount OR Credit amount + line description
-- Live "Total Debit / Total Credit / Difference" footer — Save disabled unless balanced
-- "+ Add Line" button (minimum 2 lines)
-- On save: create Voucher (`type: 'journal'`) + JournalEntry with the exact lines entered
-
-**Type changes** (`src/types/index.ts`):
-- Add `'journal'` to `VoucherType`
-- Add `'journal'` to `JournalEntry.referenceType`
-
-**Context** (`src/contexts/AppContext.tsx`):
-- `generateVoucherNumber('journal')` → `JV-YYYY-MM-XXX`
-- `addJournalVoucher(voucher, lines)` — saves voucher + raw journal entry (skips the auto-posting logic used by other vouchers)
-
-**Routing & menu**:
-- Route `/vouchers/journal` in `App.tsx`
-- Card on `VoucherDashboard` titled "Journal Voucher" (icon: `BookOpen`)
-
----
-
-## 2. Item Master with VAT
-
-**New type** `Item` in `src/types/index.ts`:
-```ts
-interface Item {
-  id: string;
-  name: string;
-  description?: string;
-  unit?: string;        // pcs, kg, hr...
-  rate: number;         // default sale rate
-  cost?: number;        // default purchase rate
-  stock: number;
-  reorderLevel?: number;
-  vatApplicable: boolean;
-  vatPercentage: number; // 0, 5, 15, etc.
-  createdAt: string;
-}
+```text
+┌───────────────────────────┐
+│ PAYMENT DETAILS           │
+│ Bank:      HDFC Bank      │
+│ Account:   1234 5678 9012 │
+└───────────────────────────┘
 ```
 
-**Settings additions** (`BusinessSettings`):
-- `defaultVatPercentage: number` (e.g. 5)
-- `vatEnabled: boolean`
+Render only when either field is set.
 
-**New page** `src/pages/ItemsList.tsx`:
-- Full CRUD: name, unit, rate, cost, opening stock, reorder level, **VAT applicable toggle**, **VAT %** (defaults from settings)
-- Search + edit/delete
+## 2. VAT visible in PDF (Quotation + Invoice)
 
-**LineItem changes** (`src/types/index.ts`):
-- Add `itemId: string` (required), `vatApplicable: boolean`, `vatPercentage: number`, `vatAmount: number`
-- Keep `name`, `rate`, `qty`, `total` populated from selected item
+Currently the PDF table has columns: `# | Item | Qty | Rate | Total` and only a Grand Total row.
 
-**Quotation / Invoice / Purchase Invoice forms** (`QuotationForm.tsx`, `InvoiceForm.tsx`, `PurchaseInvoiceForm.tsx`):
-- Replace free-text item name input with a **searchable Item dropdown** (Command + Popover) — only items from Item Master are selectable
-- Next to each row's item dropdown: **`+` button** opens a small "Quick Add Item" dialog that creates the item via `addItem()` and auto-selects it
-- On item select: auto-fill rate/cost, vatApplicable, vatPercentage from the Item record (user can still override qty/rate per line)
-- Per line: compute `vatAmount = vatApplicable ? (qty*rate * vatPercentage/100) : 0`
-- Totals footer: **Subtotal, VAT Total, Grand Total** (replaces single `netTotal` display; `netTotal` stored = grand total)
-- Reduce/restore stock on save/delete (sales decreases, purchase increases)
+**Edit `src/lib/documentUtils.ts`**:
 
-**Context**:
-- `items: Item[]`, `addItem`, `updateItem`, `deleteItem`
-- `adjustItemStock(itemId, delta)`
+- Add **VAT %** and **VAT Amount** columns to the items table:
+  `# | Item | Qty | Rate | VAT % | VAT Amt | Total`
+- For lines where `vatApplicable` is false, show `—` in the VAT columns.
+- Replace single Grand Total with a 3-row totals box:
+  - **Subtotal** (sum of `qty × rate`)
+  - **VAT** (sum of `vatAmount`)
+  - **Grand Total** (`netTotal`)
+- Same template is used for both quotation and invoice, so both get fixed in one edit.
 
-**Routing & menu**:
-- Route `/items` in `App.tsx`
-- Add "Items" entry to `RadialMenu.tsx` nav array (icon: `Package`)
+## 3. LAN multi-user via local Node/Express server on the main PC
+
+**New folder `server/`** at project root containing a standalone Express + SQLite server that runs on the main PC and exposes the same data over HTTP on the LAN.
+
+```text
+server/
+├── package.json          (express, better-sqlite3, cors)
+├── server.js             (REST API + SQLite, port 4000)
+├── schema.sql            (mirrors current Electron schema + bank fields, vat columns, items, vouchers, audit)
+└── README.md             (how to run + find LAN IP)
+```
+
+**Endpoints** (all JSON, all support concurrent clients via better-sqlite3 WAL mode):
+
+```text
+GET    /api/health
+GET    /api/clients          POST /api/clients          PUT /api/clients/:id     DELETE …
+GET    /api/items            POST /api/items            PUT  …                    DELETE …
+GET    /api/quotations       POST /api/quotations       PUT  …                    DELETE …
+GET    /api/invoices         POST /api/invoices         PUT  …                    DELETE …
+GET    /api/purchase-invoices  POST … PUT … DELETE …
+GET    /api/payments         POST /api/payments
+GET    /api/vouchers         POST /api/vouchers
+GET    /api/journal-entries  POST /api/journal-entries
+GET    /api/accounts         POST /api/accounts         DELETE …
+GET    /api/settings         PUT  /api/settings
+GET    /api/companies        POST/PUT/DELETE
+```
+
+**Concurrency control** — each row gets `updated_at` and `version INTEGER`. PUT requires the client's `version`; if it doesn't match the DB, the server returns `409 Conflict` with the latest record so the client can prompt the user. SQLite is opened with `PRAGMA journal_mode=WAL` so multiple clients can read while one writes.
+
+**Frontend integration** — new file `src/lib/apiClient.ts`:
+
+- Reads server URL from `localStorage.serverUrl` (default `http://localhost:4000`).
+- Wraps fetch with retry + 409 handling.
+- Exported helpers: `api.list('clients')`, `api.save('clients', obj)`, etc.
+
+**New `useRemoteCollection` hook** replacing `useLocalStorage` for shared collections when a server URL is configured. Behavior:
+1. On mount: fetch from server, fall back to localStorage if offline.
+2. Poll every 5s for changes (lightweight `If-Modified-Since`-style timestamp check via `GET /api/changes?since=…`).
+3. On save: POST/PUT to server, then update local cache.
+4. If server unreachable: keep working offline, queue mutations, sync when back.
+
+**Settings page — new "Network" card**:
+- Mode: `Standalone (this PC only)` | `Server (host the database)` | `Client (connect to server)`
+- Server URL field (e.g. `http://192.168.1.50:4000`)
+- "Test connection" button
+- When mode = Server, show the LAN IP detected (read-only) and instructions to give it to client PCs.
+
+**Electron integration** — when the app runs in Electron AND mode = Server, `main.js` automatically spawns the Node server as a child process on app start so the user doesn't run two programs.
+
+## 4. Stability & concurrency
+
+- WAL mode in SQLite (multiple concurrent readers + one writer, no blocking).
+- Optimistic locking via `version` column (see above).
+- Server logs every mutation with timestamp + client IP for audit.
+- Client shows toast on `409 Conflict`: "This record was changed by another user. Reload?"
+- Polling debounced; HMR/network errors shown as silent banner, not blocking dialogs.
+
+## 5. Single-credit scope
+
+All work fits in one cycle by reusing existing types, settings fields, and PDF template. The server is a small standalone module (~250 lines) and the client wrapper is one hook + one api file. No schema rewrite of localStorage is required — `useRemoteCollection` falls back transparently.
 
 ---
 
-## 3. Item-wise Report (Tally style)
+## Files changed / created
 
-**New page** `src/pages/reports/ItemReport.tsx`:
-- Date range filter
-- Table columns: Item Name | Opening Stock | Purchased Qty | Sold Qty | Closing Stock | Sales Value | Purchase Value | VAT Collected | VAT Paid
-- Click row → drilldown modal listing every quotation/invoice/purchase line that touched the item
-- Export to CSV
-
-**Linked from**: Reports area (add to `VoucherDashboard` or via radial menu under existing reports pattern)
-
----
-
-## File Change Summary
-
-| File | Action |
-|------|--------|
-| `src/types/index.ts` | Add `Item`, `journal` voucher type, extend `LineItem` & `BusinessSettings` |
-| `src/contexts/AppContext.tsx` | items state + CRUD, stock adjust, journal voucher handler |
-| `src/pages/JournalVoucher.tsx` | New — multi-line debit/credit form |
-| `src/pages/ItemsList.tsx` | New — item master CRUD with VAT |
-| `src/pages/reports/ItemReport.tsx` | New — item-wise stock & value report |
-| `src/pages/QuotationForm.tsx` | Item dropdown + `+` quick-add + VAT calc + totals |
-| `src/pages/InvoiceForm.tsx` | Same as quotation + stock decrement |
-| `src/pages/PurchaseInvoiceForm.tsx` | Same + stock increment + VAT paid tracking |
-| `src/pages/VoucherDashboard.tsx` | Add Journal Voucher card |
-| `src/pages/Settings.tsx` | Add VAT default % + VAT enabled toggle |
-| `src/App.tsx` | Routes for `/vouchers/journal`, `/items`, `/reports/items` |
-| `src/components/layout/RadialMenu.tsx` | Add "Items" nav item |
-
-## Migration note
-Existing quotations/invoices have line items without `itemId`. They'll continue to display (we'll treat missing `itemId` as legacy free-text and show as-is in lists), but editing them will require selecting an item from the master.
+| File | Change |
+|---|---|
+| `src/lib/documentUtils.ts` | Add VAT columns, Subtotal/VAT/Total box, Bank details block |
+| `server/package.json` | New — express, better-sqlite3, cors |
+| `server/server.js` | New — REST API + SQLite WAL + optimistic locking |
+| `server/schema.sql` | New — full schema incl. bank, vat, items, vouchers |
+| `server/README.md` | New — setup & LAN instructions |
+| `src/lib/apiClient.ts` | New — fetch wrapper with 409 handling |
+| `src/hooks/useRemoteCollection.ts` | New — server-aware replacement for useLocalStorage |
+| `src/contexts/AppContext.tsx` | Switch shared collections to useRemoteCollection when server configured |
+| `src/pages/Settings.tsx` | New "Network / Multi-user" card |
+| `main.js` | Optionally spawn server child process when mode = Server |
 
