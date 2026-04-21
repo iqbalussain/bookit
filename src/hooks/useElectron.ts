@@ -1,5 +1,4 @@
 import { useCallback } from 'react';
-<<<<<<< HEAD
 import { useToast } from '@/hooks/use-toast';
 
 /**
@@ -35,28 +34,3 @@ export function useElectron() {
 }
 
 export default useElectron;
-=======
-
-export function useElectron() {
-  const isElectron = typeof window !== 'undefined' && !!window.electronAPI;
-
-  const safeCall = useCallback(async <T>(
-    operationName: string,
-    operation: () => Promise<T>
-  ): Promise<T | null> => {
-    if (!isElectron) {
-      console.warn(`${operationName} is only available in the desktop app`);
-      return null;
-    }
-
-    try {
-      return await operation();
-    } catch (error) {
-      console.error(`Failed to ${operationName.toLowerCase()}:`, error);
-      return null;
-    }
-  }, [isElectron]);
-
-  return { isElectron, safeCall };
-}
->>>>>>> a45e102 (DS)
