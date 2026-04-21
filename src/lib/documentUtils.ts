@@ -195,6 +195,8 @@ export async function generatePDF({ type, document, client, settings }: Document
             <th>Item</th>
             <th style="width: 80px;">Qty</th>
             <th style="width: 120px;">Rate</th>
+            <th style="width: 70px;">VAT %</th>
+            <th style="width: 110px;">VAT Amt</th>
             <th style="width: 120px;">Total</th>
           </tr>
         </thead>
@@ -208,7 +210,9 @@ export async function generatePDF({ type, document, client, settings }: Document
               </td>
               <td>${item.quantity}</td>
               <td>${currencySymbol}${item.rate.toLocaleString('en-IN')}</td>
-              <td>${currencySymbol}${item.total.toLocaleString('en-IN')}</td>
+              <td>${item.vatApplicable ? `${item.vatPercentage ?? 0}%` : '—'}</td>
+              <td>${item.vatApplicable ? `${currencySymbol}${(item.vatAmount ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '—'}</td>
+              <td>${currencySymbol}${(item.total + (item.vatApplicable ? (item.vatAmount ?? 0) : 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
             </tr>
           `).join('')}
         </tbody>
@@ -216,13 +220,31 @@ export async function generatePDF({ type, document, client, settings }: Document
       
       <div class="totals">
         <div class="totals-box">
+          <div class="total-row">
+            <span>Subtotal</span>
+            <span>${currencySymbol}${document.items.reduce((s, i) => s + i.total, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+          </div>
+          <div class="total-row">
+            <span>VAT</span>
+            <span>${currencySymbol}${document.items.reduce((s, i) => s + (i.vatApplicable ? (i.vatAmount ?? 0) : 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+          </div>
           <div class="total-row grand">
-            <span>Total</span>
+            <span>Grand Total</span>
             <span>${currencySymbol}${document.netTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
           </div>
         </div>
       </div>
       
+      ${(settings.bankName || settings.bankAccountNumber) ? `
+        <div class="notes-section">
+          <h4>Payment Details</h4>
+          <p>
+            ${settings.bankName ? `<strong>Bank:</strong> ${settings.bankName}<br>` : ''}
+            ${settings.bankAccountNumber ? `<strong>Account No:</strong> ${settings.bankAccountNumber}` : ''}
+          </p>
+        </div>
+      ` : ''}
+
       ${document.notes ? `
         <div class="notes-section">
           <h4>Notes</h4>
