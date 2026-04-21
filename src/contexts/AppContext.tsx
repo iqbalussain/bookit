@@ -508,7 +508,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await window.electronAPI!.query(
           `INSERT OR REPLACE INTO quotations (id, number, client_id, net_total, vat_amount, total, status, converted_invoice_id, notes, terms, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [quotation.id, quotation.number, quotation.clientId, quotation.netTotal, quotation.vatAmount || 0, quotation.total || quotation.netTotal, quotation.status, quotation.convertedInvoiceId, quotation.notes, quotation.terms, quotation.createdAt, quotation.updatedAt]
+          [quotation.id, quotation.number, quotation.clientId, quotation.netTotal, 0, quotation.netTotal, quotation.status, quotation.convertedInvoiceId, quotation.notes, quotation.terms, quotation.createdAt, quotation.updatedAt]
         );
       }
 
@@ -517,7 +517,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await window.electronAPI!.query(
           `INSERT OR REPLACE INTO invoices (id, number, client_id, quotation_id, net_total, vat_amount, total, status, due_date, notes, terms, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [invoice.id, invoice.number, invoice.clientId, invoice.quotationId, invoice.netTotal, invoice.vatAmount || 0, invoice.total || invoice.netTotal, invoice.status, invoice.dueDate, invoice.notes, invoice.terms, invoice.createdAt, invoice.updatedAt]
+          [invoice.id, invoice.number, invoice.clientId, invoice.quotationId, invoice.netTotal, 0, invoice.netTotal, invoice.status, invoice.dueDate, invoice.notes, invoice.terms, invoice.createdAt, invoice.updatedAt]
         );
       }
 
@@ -526,7 +526,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await window.electronAPI!.query(
           `INSERT OR REPLACE INTO purchase_invoices (id, number, vendor_id, net_total, vat_amount, total, status, due_date, notes, terms, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [pi.id, pi.number, pi.vendorId, pi.netTotal, pi.vatAmount || 0, pi.total || pi.netTotal, pi.status, pi.dueDate, pi.notes, pi.terms, pi.createdAt, pi.updatedAt]
+          [pi.id, pi.number, pi.vendorId, pi.netTotal, 0, pi.netTotal, pi.status, pi.dueDate, pi.notes, pi.terms, pi.createdAt, pi.updatedAt]
         );
       }
 
