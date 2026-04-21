@@ -9,6 +9,7 @@ import { AppProvider } from "@/contexts/AppContext";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useToast } from "@/hooks/use-toast";
+import { setConflictHandler } from "@/lib/apiClient";
 import Dashboard from "./pages/Dashboard";
 import QuotationsList from "./pages/QuotationsList";
 import QuotationForm from "./pages/QuotationForm";
@@ -55,6 +56,18 @@ function StorageErrorListener() {
     window.addEventListener('bookit:storage-error', handler);
     return () => window.removeEventListener('bookit:storage-error', handler);
   }, [toast]);
+
+  // LAN concurrency: another user changed the same record we tried to save.
+  useEffect(() => {
+    setConflictHandler((collection) => {
+      toast({
+        title: 'Record changed by another user',
+        description: `Your edit on ${collection.replace('/api/records/', '')} clashed with a newer change. The latest version will appear shortly.`,
+        variant: 'destructive',
+      });
+    });
+  }, [toast]);
+
   return null;
 }
 
