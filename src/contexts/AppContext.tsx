@@ -659,7 +659,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
 
       // Sync business settings from database
-      const dbSettings = await window.electronAPI!.getBusinessSettings();
+      const dbSettings = (await window.electronAPI!.getBusinessSettings()) as Record<string, any> | null;
       if (dbSettings) {
         setSettings({
           name: dbSettings.name || '',
@@ -669,7 +669,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           logo: dbSettings.logo,
           currency: dbSettings.currency || 'INR',
           taxNumber: dbSettings.tax_number,
-          vatRate: settings.vatRate || 18, // Keep local VAT rate
+          defaultVatPercentage: settings.defaultVatPercentage ?? 18,
+          vatEnabled: settings.vatEnabled,
+          bankName: settings.bankName,
+          bankAccountNumber: settings.bankAccountNumber,
           theme: settings.theme,
         });
       }
