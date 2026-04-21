@@ -1,5 +1,6 @@
 import React, { createContext, useContext, ReactNode } from 'react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { useRemoteCollection } from '@/hooks/useRemoteCollection';
 import type { Client, Quotation, Invoice, PurchaseInvoice, BusinessSettings, Payment, Account, JournalEntry, JournalLine, Company, Voucher, VoucherType, AuditEntry, Item } from '@/types';
 import { DEFAULT_ACCOUNTS } from '@/types';
 
@@ -118,15 +119,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const companyKey = (key: string) => `app_${key}_${selectedCompanyId}`;
 
-  const [clients, setClients] = useLocalStorage<Client[]>(companyKey('clients'), []);
-  const [quotations, setQuotations] = useLocalStorage<Quotation[]>(companyKey('quotations'), []);
-  const [invoices, setInvoices] = useLocalStorage<Invoice[]>(companyKey('invoices'), []);
-  const [purchaseInvoices, setPurchaseInvoices] = useLocalStorage<PurchaseInvoice[]>(companyKey('purchase_invoices'), []);
-  const [payments, setPayments] = useLocalStorage<Payment[]>(companyKey('payments'), []);
-  const [accounts, setAccounts] = useLocalStorage<Account[]>(companyKey('accounts'), DEFAULT_ACCOUNTS);
-  const [journalEntries, setJournalEntries] = useLocalStorage<JournalEntry[]>(companyKey('journal_entries'), []);
-  const [vouchers, setVouchers] = useLocalStorage<Voucher[]>(companyKey('vouchers'), []);
-  const [items, setItems] = useLocalStorage<Item[]>(companyKey('items'), []);
+  // Shared collections sync with the LAN server when one is configured;
+  // otherwise they fall back to localStorage.
+  const [clients, setClients] = useRemoteCollection<Client>('clients', companyKey('clients'), []);
+  const [quotations, setQuotations] = useRemoteCollection<Quotation>('quotations', companyKey('quotations'), []);
+  const [invoices, setInvoices] = useRemoteCollection<Invoice>('invoices', companyKey('invoices'), []);
+  const [purchaseInvoices, setPurchaseInvoices] = useRemoteCollection<PurchaseInvoice>('purchaseInvoices', companyKey('purchase_invoices'), []);
+  const [payments, setPayments] = useRemoteCollection<Payment>('payments', companyKey('payments'), []);
+  const [accounts, setAccounts] = useRemoteCollection<Account>('accounts', companyKey('accounts'), DEFAULT_ACCOUNTS);
+  const [journalEntries, setJournalEntries] = useRemoteCollection<JournalEntry>('journalEntries', companyKey('journal_entries'), []);
+  const [vouchers, setVouchers] = useRemoteCollection<Voucher>('vouchers', companyKey('vouchers'), []);
+  const [items, setItems] = useRemoteCollection<Item>('items', companyKey('items'), []);
   const [settings, setSettings] = useLocalStorage<BusinessSettings>(companyKey('settings'), defaultSettings);
   const [auditLog, setAuditLog] = useLocalStorage<AuditEntry[]>(companyKey('audit_log'), []);
 
