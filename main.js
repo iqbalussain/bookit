@@ -38,6 +38,8 @@ db.serialize(() => {
     number TEXT,
     client_id TEXT,
     net_total REAL,
+    vat_amount REAL DEFAULT 0,
+    total REAL,
     status TEXT,
     converted_invoice_id TEXT,
     notes TEXT,
@@ -62,6 +64,8 @@ db.serialize(() => {
     client_id TEXT,
     quotation_id TEXT,
     net_total REAL,
+    vat_amount REAL DEFAULT 0,
+    total REAL,
     status TEXT,
     due_date TEXT,
     notes TEXT,
@@ -86,6 +90,8 @@ db.serialize(() => {
     number TEXT,
     vendor_id TEXT,
     net_total REAL,
+    vat_amount REAL DEFAULT 0,
+    total REAL,
     status TEXT,
     due_date TEXT,
     notes TEXT,
@@ -247,11 +253,11 @@ ipcMain.handle('get-parties', async () => {
 
 ipcMain.handle('save-invoice', async (event, invoice) => {
   return new Promise((resolve, reject) => {
-    const { id, number, client_id, quotation_id, net_total, status, due_date, notes, terms, created_at, updated_at } = invoice;
+    const { id, number, client_id, quotation_id, net_total, vat_amount, total, status, due_date, notes, terms, created_at, updated_at } = invoice;
     db.run(
-      `INSERT OR REPLACE INTO invoices (id, number, client_id, quotation_id, net_total, status, due_date, notes, terms, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, number, client_id, quotation_id, net_total, status, due_date, notes, terms, created_at, updated_at],
+      `INSERT OR REPLACE INTO invoices (id, number, client_id, quotation_id, net_total, vat_amount, total, status, due_date, notes, terms, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, number, client_id, quotation_id, net_total, vat_amount || 0, total || net_total, status, due_date, notes, terms, created_at, updated_at],
       function(err) {
         if (err) {
           reject(err);
@@ -277,11 +283,11 @@ ipcMain.handle('get-invoices', async () => {
 
 ipcMain.handle('save-quotation', async (event, quotation) => {
   return new Promise((resolve, reject) => {
-    const { id, number, client_id, net_total, status, converted_invoice_id, notes, terms, created_at, updated_at } = quotation;
+    const { id, number, client_id, net_total, vat_amount, total, status, converted_invoice_id, notes, terms, created_at, updated_at } = quotation;
     db.run(
-      `INSERT OR REPLACE INTO quotations (id, number, client_id, net_total, status, converted_invoice_id, notes, terms, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, number, client_id, net_total, status, converted_invoice_id, notes, terms, created_at, updated_at],
+      `INSERT OR REPLACE INTO quotations (id, number, client_id, net_total, vat_amount, total, status, converted_invoice_id, notes, terms, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, number, client_id, net_total, vat_amount || 0, total || net_total, status, converted_invoice_id, notes, terms, created_at, updated_at],
       function(err) {
         if (err) {
           reject(err);
@@ -307,11 +313,11 @@ ipcMain.handle('get-quotations', async () => {
 
 ipcMain.handle('save-purchase-invoice', async (event, purchaseInvoice) => {
   return new Promise((resolve, reject) => {
-    const { id, number, vendor_id, net_total, status, due_date, notes, terms, created_at, updated_at } = purchaseInvoice;
+    const { id, number, vendor_id, net_total, vat_amount, total, status, due_date, notes, terms, created_at, updated_at } = purchaseInvoice;
     db.run(
-      `INSERT OR REPLACE INTO purchase_invoices (id, number, vendor_id, net_total, status, due_date, notes, terms, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, number, vendor_id, net_total, status, due_date, notes, terms, created_at, updated_at],
+      `INSERT OR REPLACE INTO purchase_invoices (id, number, vendor_id, net_total, vat_amount, total, status, due_date, notes, terms, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, number, vendor_id, net_total, vat_amount || 0, total || net_total, status, due_date, notes, terms, created_at, updated_at],
       function(err) {
         if (err) {
           reject(err);

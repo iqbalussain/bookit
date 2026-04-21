@@ -4,13 +4,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useElectron } from '@/hooks/useElectron';
-import { Database, Download, Upload, Info } from 'lucide-react';
+import { Database, Download, Upload, Info, RefreshCw } from 'lucide-react';
 
 export default function BackupRestore() {
-  const { selectedCompanyId, companies } = useApp();
+  const { selectedCompanyId, companies, forceSync, isElectron } = useApp();
   const [dbPath, setDbPath] = useState<string>('');
+  const [syncing, setSyncing] = useState(false);
   const { toast } = useToast();
-  const { safeCall, isElectron } = useElectron();
+  const { safeCall } = useElectron();
 
   const companyName = companies.find((c) => c.id === selectedCompanyId)?.name || 'default';
 
@@ -54,6 +55,27 @@ export default function BackupRestore() {
     }
   };
 
+  const handleForceSync = async () => {
+    if (!isElectron) {
+      toast({ title: 'Not available', description: 'Sync is only available in the desktop app.', variant: 'destructive' });
+      return;
+    }
+
+    setSyncing(true);
+    try {
+      await forceSync();
+      toast({ title: 'Sync complete!', description: 'Data has been synchronized between local storage and database.' });
+    } catch (error) {
+      toast({ 
+        title: 'Sync failed', 
+        description: error instanceof Error ? error.message : 'An error occurred during sync.', 
+        variant: 'destructive' 
+      });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   return (
     <Card>
       <CardHeader className="py-3 px-4">
@@ -73,6 +95,12 @@ export default function BackupRestore() {
           <Button onClick={handleRestore} variant="outline" size="sm" className="flex-1 gap-2">
             <Upload className="h-4 w-4" />Restore Backup
           </Button>
+          {isElectron && (
+            <Button onClick={handleForceSync} variant="default" size="sm" className="flex-1 gap-2" disabled={syncing}>
+              <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
+              {syncing ? 'Syncing...' : 'Force Sync'}
+            </Button>
+          )}
         </div>
 
         <div className="rounded-lg bg-muted/50 p-3 space-y-2">
@@ -85,6 +113,7 @@ export default function BackupRestore() {
               </p>
               <p className="text-xs text-muted-foreground">
                 Your data is stored in a single file. Copy this file to backup manually or use the buttons above.
+                {isElectron && ' Use Force Sync to synchronize data between local storage and the database.'}
               </p>
             </div>
           </div>

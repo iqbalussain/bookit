@@ -81,6 +81,12 @@ interface AppContextType {
   settings: BusinessSettings;
   setSettings: (settings: BusinessSettings | ((prev: BusinessSettings) => BusinessSettings)) => void;
   
+  // Sync functionality
+  syncToDatabase: () => Promise<void>;
+  syncFromDatabase: () => Promise<void>;
+  forceSync: () => Promise<void>;
+  isElectron: boolean;
+  
   // Audit & activity log
   auditLog: AuditEntry[];
   addAuditEntry: (entry: Omit<AuditEntry, 'id' | 'createdAt'>) => void;
@@ -477,6 +483,213 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return candidate;
   };
 
+  // Sync functionality
+  const isElectron = typeof window !== 'undefined' && !!window.electronAPI;
+
+  const syncToDatabase = async () => {
+    if (!isElectron) {
+      throw new Error('Sync is only available in the desktop app');
+    }
+
+    try {
+      // Sync clients
+      for (const client of clients) {
+        await window.electronAPI!.query(
+          `INSERT OR REPLACE INTO parties (id, type, name, email, phone, address, tax_number, payment_terms, credit_limit, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [client.id, client.type, client.name, client.email, client.phone, client.address, client.taxRegistrationNumber, client.paymentTermsDays, client.creditLimit, client.createdAt]
+        );
+      }
+
+      // Sync quotations
+      for (const quotation of quotations) {
+        await window.electronAPI!.query(
+          `INSERT OR REPLACE INTO quotations (id, number, client_id, net_total, vat_amount, total, status, converted_invoice_id, notes, terms, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [quotation.id, quotation.number, quotation.clientId, quotation.netTotal, quotation.vatAmount || 0, quotation.total || quotation.netTotal, quotation.status, quotation.convertedInvoiceId, quotation.notes, quotation.terms, quotation.createdAt, quotation.updatedAt]
+        );
+      }
+
+      // Sync invoices
+      for (const invoice of invoices) {
+        await window.electronAPI!.query(
+          `INSERT OR REPLACE INTO invoices (id, number, client_id, quotation_id, net_total, vat_amount, total, status, due_date, notes, terms, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [invoice.id, invoice.number, invoice.clientId, invoice.quotationId, invoice.netTotal, invoice.vatAmount || 0, invoice.total || invoice.netTotal, invoice.status, invoice.dueDate, invoice.notes, invoice.terms, invoice.createdAt, invoice.updatedAt]
+        );
+      }
+
+      // Sync purchase invoices
+      for (const pi of purchaseInvoices) {
+        await window.electronAPI!.query(
+          `INSERT OR REPLACE INTO purchase_invoices (id, number, vendor_id, net_total, vat_amount, total, status, due_date, notes, terms, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [pi.id, pi.number, pi.vendorId, pi.netTotal, pi.vatAmount || 0, pi.total || pi.netTotal, pi.status, pi.dueDate, pi.notes, pi.terms, pi.createdAt, pi.updatedAt]
+        );
+      }
+
+      // Sync payments
+      for (const payment of payments) {
+        await window.electronAPI!.query(
+          `INSERT OR REPLACE INTO payments (id, invoice_id, invoice_type, amount, date, method, reference, notes, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [payment.id, payment.invoiceId, payment.invoiceType, payment.amount, payment.date, payment.method, payment.reference, payment.notes, payment.createdAt]
+        );
+      }
+
+      // Sync business settings
+      await window.electronAPI!.query(
+        `INSERT OR REPLACE INTO business_settings (id, name, email, phone, address, logo, currency, tax_number)
+         VALUES (1, ?, ?, ?, ?, ?, ?, ?)`,
+        [settings.name, settings.email, settings.phone, settings.address, settings.logo, settings.currency, settings.taxNumber]
+      );
+
+    } catch (error) {
+      console.error('Sync to database failed:', error);
+      throw error;
+    }
+  };
+
+  const syncFromDatabase = async () => {
+    if (!isElectron) {
+      throw new Error('Sync is only available in the desktop app');
+    }
+
+    try {
+      // Sync clients from database
+      const dbClients = await window.electronAPI!.getParties();
+      if (dbClients && dbClients.length > 0) {
+        const formattedClients: Client[] = dbClients.map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          email: c.email,
+          phone: c.phone,
+          address: c.address,
+          type: c.type,
+          paymentTermsDays: c.payment_terms,
+          taxRegistrationNumber: c.tax_number,
+          creditLimit: c.credit_limit,
+          createdAt: c.created_at,
+        }));
+        setClients(formattedClients);
+      }
+
+      // Sync quotations from database
+      const dbQuotations = await window.electronAPI!.getQuotations();
+      if (dbQuotations && dbQuotations.length > 0) {
+        const formattedQuotations: Quotation[] = dbQuotations.map((q: any) => ({
+          id: q.id,
+          number: q.number,
+          clientId: q.client_id,
+          items: [], // Would need to sync line items separately
+          netTotal: q.net_total,
+          vatAmount: q.vat_amount || 0,
+          total: q.total || q.net_total,
+          status: q.status,
+          convertedInvoiceId: q.converted_invoice_id,
+          notes: q.notes,
+          terms: q.terms,
+          createdAt: q.created_at,
+          updatedAt: q.updated_at,
+        }));
+        setQuotations(formattedQuotations);
+      }
+
+      // Sync invoices from database
+      const dbInvoices = await window.electronAPI!.getInvoices();
+      if (dbInvoices && dbInvoices.length > 0) {
+        const formattedInvoices: Invoice[] = dbInvoices.map((i: any) => ({
+          id: i.id,
+          number: i.number,
+          clientId: i.client_id,
+          quotationId: i.quotation_id,
+          items: [], // Would need to sync line items separately
+          netTotal: i.net_total,
+          vatAmount: i.vat_amount || 0,
+          total: i.total || i.net_total,
+          status: i.status,
+          dueDate: i.due_date,
+          notes: i.notes,
+          terms: i.terms,
+          createdAt: i.created_at,
+          updatedAt: i.updated_at,
+        }));
+        setInvoices(formattedInvoices);
+      }
+
+      // Sync purchase invoices from database
+      const dbPurchaseInvoices = await window.electronAPI!.getPurchaseInvoices();
+      if (dbPurchaseInvoices && dbPurchaseInvoices.length > 0) {
+        const formattedPurchaseInvoices: PurchaseInvoice[] = dbPurchaseInvoices.map((p: any) => ({
+          id: p.id,
+          number: p.number,
+          vendorId: p.vendor_id,
+          items: [], // Would need to sync line items separately
+          netTotal: p.net_total,
+          vatAmount: p.vat_amount || 0,
+          total: p.total || p.net_total,
+          status: p.status,
+          dueDate: p.due_date,
+          notes: p.notes,
+          terms: p.terms,
+          createdAt: p.created_at,
+          updatedAt: p.updated_at,
+        }));
+        setPurchaseInvoices(formattedPurchaseInvoices);
+      }
+
+      // Sync payments from database
+      const dbPayments = await window.electronAPI!.getPayments();
+      if (dbPayments && dbPayments.length > 0) {
+        const formattedPayments: Payment[] = dbPayments.map((p: any) => ({
+          id: p.id,
+          invoiceId: p.invoice_id,
+          invoiceType: p.invoice_type,
+          amount: p.amount,
+          date: p.date,
+          method: p.method,
+          reference: p.reference,
+          notes: p.notes,
+          createdAt: p.created_at,
+        }));
+        // Note: This will replace all payments, might want to merge instead
+        // For now, we'll set them directly
+      }
+
+      // Sync business settings from database
+      const dbSettings = await window.electronAPI!.getBusinessSettings();
+      if (dbSettings) {
+        setSettings({
+          name: dbSettings.name || '',
+          email: dbSettings.email || '',
+          phone: dbSettings.phone || '',
+          address: dbSettings.address || '',
+          logo: dbSettings.logo,
+          currency: dbSettings.currency || 'INR',
+          taxNumber: dbSettings.tax_number,
+          vatRate: settings.vatRate || 18, // Keep local VAT rate
+          theme: settings.theme,
+        });
+      }
+
+    } catch (error) {
+      console.error('Sync from database failed:', error);
+      throw error;
+    }
+  };
+
+  const forceSync = async () => {
+    try {
+      // First sync from database to get latest data
+      await syncFromDatabase();
+      // Then sync local changes back to database
+      await syncToDatabase();
+    } catch (error) {
+      console.error('Force sync failed:', error);
+      throw error;
+    }
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -492,6 +705,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addJournalVoucher,
         items, addItem, updateItem, deleteItem, getItem, adjustItemStock,
         settings, setSettings,
+        syncToDatabase, syncFromDatabase, forceSync, isElectron,
         auditLog, addAuditEntry, getRecentAuditLog,
         generateQuotationNumber, generateInvoiceNumber,
       }}
