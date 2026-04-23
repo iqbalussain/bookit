@@ -11,15 +11,16 @@
     "preload.js"
   ],
   "win": {
-    "target": [
-      {
-        "target": "portable",
-        "arch": ["x64"]
-      }
-    ],
+    "target": "nsis",
     "icon": "public/favicon.ico"
   },
-  "portable": {
-    "artifactName": "${productName}-${version}.exe"
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": true,
+    "allowElevation": true,
+    "createDesktopShortcut": true,
+    "createDesktopShortcutPerMachine": false,
+    "artifactName": "${productName} Setup ${version}.exe"
   }
 }
