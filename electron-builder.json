@@ -20,7 +20,6 @@
     "allowToChangeInstallationDirectory": true,
     "allowElevation": true,
     "createDesktopShortcut": true,
-    "createDesktopShortcutPerMachine": false,
     "artifactName": "${productName} Setup ${version}.exe"
   }
 }
