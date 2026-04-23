@@ -1,115 +1,147 @@
 
+# Bottom Action Removal + Build Fixes + Easy Windows Installer
 
-# Bank Details, VAT in PDF, and LAN Multi-User Server
+## 1. Remove the bottom on-screen quick actions
+The screen-bottom strip with:
+- New Quote
+- New Invoice
+- Receive Payment
+- Add Client
+- `+`
 
-## 1. Bank details on Quotation & Invoice PDFs
+will be removed so only the centered radial menu remains.
 
-The `bankName` and `bankAccountNumber` fields already exist in `BusinessSettings` and the Settings UI. Only the PDF template is missing them.
+### Files to update
+- `src/components/layout/AppLayout.tsx`
+  - Remove the `quickActions` constant
+  - Remove the fixed bottom action dock markup
+  - Remove now-unused imports like `Tooltip`, `Plus`, `FileText`, `Users`, `ArrowRight` only if no longer needed
+- If still rendered anywhere else:
+  - `src/components/layout/FloatingActionButton.tsx`
+  - `src/components/layout/MobileBottomNav.tsx`
 
-**Edit `src/lib/documentUtils.ts`** — add a "Payment Details" block above the footer:
-
-```text
-┌───────────────────────────┐
-│ PAYMENT DETAILS           │
-│ Bank:      HDFC Bank      │
-│ Account:   1234 5678 9012 │
-└───────────────────────────┘
-```
-
-Render only when either field is set.
-
-## 2. VAT visible in PDF (Quotation + Invoice)
-
-Currently the PDF table has columns: `# | Item | Qty | Rate | Total` and only a Grand Total row.
-
-**Edit `src/lib/documentUtils.ts`**:
-
-- Add **VAT %** and **VAT Amount** columns to the items table:
-  `# | Item | Qty | Rate | VAT % | VAT Amt | Total`
-- For lines where `vatApplicable` is false, show `—` in the VAT columns.
-- Replace single Grand Total with a 3-row totals box:
-  - **Subtotal** (sum of `qty × rate`)
-  - **VAT** (sum of `vatAmount`)
-  - **Grand Total** (`netTotal`)
-- Same template is used for both quotation and invoice, so both get fixed in one edit.
-
-## 3. LAN multi-user via local Node/Express server on the main PC
-
-**New folder `server/`** at project root containing a standalone Express + SQLite server that runs on the main PC and exposes the same data over HTTP on the LAN.
-
-```text
-server/
-├── package.json          (express, better-sqlite3, cors)
-├── server.js             (REST API + SQLite, port 4000)
-├── schema.sql            (mirrors current Electron schema + bank fields, vat columns, items, vouchers, audit)
-└── README.md             (how to run + find LAN IP)
-```
-
-**Endpoints** (all JSON, all support concurrent clients via better-sqlite3 WAL mode):
-
-```text
-GET    /api/health
-GET    /api/clients          POST /api/clients          PUT /api/clients/:id     DELETE …
-GET    /api/items            POST /api/items            PUT  …                    DELETE …
-GET    /api/quotations       POST /api/quotations       PUT  …                    DELETE …
-GET    /api/invoices         POST /api/invoices         PUT  …                    DELETE …
-GET    /api/purchase-invoices  POST … PUT … DELETE …
-GET    /api/payments         POST /api/payments
-GET    /api/vouchers         POST /api/vouchers
-GET    /api/journal-entries  POST /api/journal-entries
-GET    /api/accounts         POST /api/accounts         DELETE …
-GET    /api/settings         PUT  /api/settings
-GET    /api/companies        POST/PUT/DELETE
-```
-
-**Concurrency control** — each row gets `updated_at` and `version INTEGER`. PUT requires the client's `version`; if it doesn't match the DB, the server returns `409 Conflict` with the latest record so the client can prompt the user. SQLite is opened with `PRAGMA journal_mode=WAL` so multiple clients can read while one writes.
-
-**Frontend integration** — new file `src/lib/apiClient.ts`:
-
-- Reads server URL from `localStorage.serverUrl` (default `http://localhost:4000`).
-- Wraps fetch with retry + 409 handling.
-- Exported helpers: `api.list('clients')`, `api.save('clients', obj)`, etc.
-
-**New `useRemoteCollection` hook** replacing `useLocalStorage` for shared collections when a server URL is configured. Behavior:
-1. On mount: fetch from server, fall back to localStorage if offline.
-2. Poll every 5s for changes (lightweight `If-Modified-Since`-style timestamp check via `GET /api/changes?since=…`).
-3. On save: POST/PUT to server, then update local cache.
-4. If server unreachable: keep working offline, queue mutations, sync when back.
-
-**Settings page — new "Network" card**:
-- Mode: `Standalone (this PC only)` | `Server (host the database)` | `Client (connect to server)`
-- Server URL field (e.g. `http://192.168.1.50:4000`)
-- "Test connection" button
-- When mode = Server, show the LAN IP detected (read-only) and instructions to give it to client PCs.
-
-**Electron integration** — when the app runs in Electron AND mode = Server, `main.js` automatically spawns the Node server as a child process on app start so the user doesn't run two programs.
-
-## 4. Stability & concurrency
-
-- WAL mode in SQLite (multiple concurrent readers + one writer, no blocking).
-- Optimistic locking via `version` column (see above).
-- Server logs every mutation with timestamp + client IP for audit.
-- Client shows toast on `409 Conflict`: "This record was changed by another user. Reload?"
-- Polling debounced; HMR/network errors shown as silent banner, not blocking dialogs.
-
-## 5. Single-credit scope
-
-All work fits in one cycle by reusing existing types, settings fields, and PDF template. The server is a small standalone module (~250 lines) and the client wrapper is one hook + one api file. No schema rewrite of localStorage is required — `useRemoteCollection` falls back transparently.
+### Result
+Cleaner mobile/desktop bottom area with no duplicate action buttons.
 
 ---
 
-## Files changed / created
+## 2. Fix the current TypeScript build errors
+The invoice status type no longer supports `'unpaid'` in the same way as the current logic expects, and `'sent'` checks are conflicting with the defined status union in some places.
 
-| File | Change |
-|---|---|
-| `src/lib/documentUtils.ts` | Add VAT columns, Subtotal/VAT/Total box, Bank details block |
-| `server/package.json` | New — express, better-sqlite3, cors |
-| `server/server.js` | New — REST API + SQLite WAL + optimistic locking |
-| `server/schema.sql` | New — full schema incl. bank, vat, items, vouchers |
-| `server/README.md` | New — setup & LAN instructions |
-| `src/lib/apiClient.ts` | New — fetch wrapper with 409 handling |
-| `src/hooks/useRemoteCollection.ts` | New — server-aware replacement for useLocalStorage |
-| `src/contexts/AppContext.tsx` | Switch shared collections to useRemoteCollection when server configured |
-| `src/pages/Settings.tsx` | New "Network / Multi-user" card |
-| `main.js` | Optionally spawn server child process when mode = Server |
+### Files to update
+- `src/types/index.ts`
+- `src/pages/InvoiceForm.tsx`
+- `src/pages/InvoicesList.tsx`
 
+### Fixes
+- Make invoice status handling consistent across:
+  - saved invoice records
+  - displayed payment-derived status
+  - badge/button conditional logic
+- Replace invalid `'unpaid'` fallback usage with a valid `InvoiceStatus`
+- Refactor `currentStatus === 'sent'` checks if the form is actually using computed payment status rather than stored invoice status
+- Ensure helper return types match `InvoiceStatus`
+
+### Expected outcome
+These errors will be resolved:
+- `TS2367` in `InvoiceForm.tsx`
+- `TS2345` in `InvoicesList.tsx`
+
+---
+
+## 3. Keep VAT/PDF and bank detail work intact while making the app buildable
+The already-added VAT and bank-detail document work will be preserved, but I will verify the recent edits don’t introduce additional compile errors.
+
+### Files to validate/update if needed
+- `src/lib/documentUtils.ts`
+- `src/contexts/AppContext.tsx`
+- `src/pages/Settings.tsx`
+
+### Result
+No regression to:
+- Bank details in quotation/invoice PDF
+- VAT columns and totals in quotation/invoice PDF
+- LAN multi-user changes already introduced
+
+---
+
+## 4. Deliver a proper easy-to-install Windows `.exe`
+You asked specifically for a proper installer that works easily on Windows PCs.
+
+### Best implementation path
+Use the existing `electron-builder` + `NSIS` installer setup already present in:
+- `electron-builder.json`
+- `.github/workflows/release.yml`
+
+### Work to complete
+- Verify `package.json` build script is aligned with the installer config
+- Make sure Electron entry/build config works reliably for production
+- Avoid Bun for packaging because Bun is crashing in this environment
+- Use `npm` for installer builds and CI packaging
+- Ensure the produced artifact is an installer `.exe`, not just a portable app folder
+
+### Important constraint
+A real Windows installer must be built on a Windows environment for best reliability. The safest low-credit approach is:
+
+```text
+GitHub Actions (windows-latest)
+-> npm ci
+-> npm run build-win
+-> upload NSIS installer .exe to the Release
+```
+
+### Result
+You’ll get:
+- a proper Windows installer `.exe`
+- installation wizard
+- desktop shortcut option
+- install location selection
+- easier installation on other PCs
+
+---
+
+## 5. Keep it within the lowest practical credit usage
+To stay close to your “only 2 credit” requirement, implementation will be kept tight:
+
+### Minimal-scope strategy
+1. Remove the bottom quick-action bar
+2. Fix the current TS build failures
+3. Verify production build path
+4. Finalize Windows installer flow using existing NSIS setup instead of adding a second packaging system
+
+### Deliberately avoided
+- No redesign of navigation
+- No new packaging framework
+- No unnecessary refactors
+- No Bun-based install/build path
+
+---
+
+## Files expected to change
+- `src/components/layout/AppLayout.tsx`
+- `src/pages/InvoiceForm.tsx`
+- `src/pages/InvoicesList.tsx`
+- possibly `src/types/index.ts`
+- possibly `package.json`
+- possibly `.github/workflows/release.yml` only if script alignment is needed
+
+## Final deliverable
+After implementation:
+- the bottom quick-action strip is gone
+- the build errors are fixed
+- the app is production-buildable again
+- the Windows installer path is cleaned up and ready to generate a proper `.exe`
+
+## Technical notes
+```text
+Main packaging choice: electron-builder + NSIS
+Reason: produces a real Windows installer
+
+Do not rely on Bun for install/build
+Reason: current environment shows Bun segmentation fault during install
+
+Status fix approach:
+- normalize invoice status checks
+- remove invalid 'unpaid' handling where InvoiceStatus does not allow it
+- keep computed overdue/payment display separate from stored status
+```
