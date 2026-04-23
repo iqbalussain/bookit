@@ -52,6 +52,15 @@ npm run build
 npm run electron
 ```
 
+#### Windows Installer (.exe)
+```sh
+npm install
+npm run build-win
+```
+
+This produces a proper NSIS installer such as `BookIt Setup 12.1.0.exe` in `dist-electron/`.
+It installs BookIt for offline use and still allows optional LAN connection from the Settings screen.
+
 ### Database Location
 
 The SQLite database is stored at:

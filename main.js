@@ -2,6 +2,14 @@ const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const sqlite3 = require('sqlite3').verbose();
 
+app.setName('BookIt');
+app.setAppUserModelId('com.bookit.app');
+
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) {
+  app.quit();
+}
+
 // Database file location - single file users can backup
 const dbPath = path.join(app.getPath('userData'), 'invoiceflow.db');
 const db = new sqlite3.Database(dbPath);
@@ -196,6 +204,9 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
+    minWidth: 1024,
+    minHeight: 700,
+    autoHideMenuBar: true,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -213,6 +224,12 @@ function createWindow() {
 }
 
 app.whenReady().then(createWindow);
+
+app.on('second-instance', () => {
+  if (!mainWindow) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.focus();
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
