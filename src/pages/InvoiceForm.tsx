@@ -64,8 +64,8 @@ export default function InvoiceForm() {
   const vatTotal = useMemo(() => items.reduce((sum, item) => sum + (item.vatAmount ?? 0), 0), [items]);
   const grandTotal = netTotal + vatTotal;
   // Calculate displayed status based on payment records
-  const displayedStatus = existingInvoice ? calculateInvoicePaymentStatus(existingInvoice.id) : 'draft';
-  const currentStatus = existingInvoice?.status === 'draft' 
+  const displayedStatus: InvoiceStatus | 'draft' = existingInvoice ? calculateInvoicePaymentStatus(existingInvoice.id) : 'draft';
+  const currentStatus: InvoiceStatus = existingInvoice?.status === 'draft' 
     ? 'draft' 
     : existingInvoice?.status === 'cancelled'
     ? 'cancelled'
@@ -256,7 +256,7 @@ export default function InvoiceForm() {
         </div>
         {isEditing && (
           <div className="flex gap-1.5 shrink-0">
-            {(currentStatus === 'sent' || currentStatus === 'partial') && (
+            {(currentStatus === 'partial' || (existingInvoice?.status === 'sent' && currentStatus !== 'paid')) && (
               <Button variant="outline" size="sm" onClick={() => navigate(`/invoices/${id}/payment`)} className="h-8 px-2">
                 <CreditCard className="h-4 w-4" />
                 <span className="hidden sm:inline ml-1.5">Payment</span>
@@ -385,7 +385,7 @@ export default function InvoiceForm() {
                 <Send className="mr-1.5 h-4 w-4" />Mark as Sent
               </Button>
             )}
-            {(currentStatus === 'sent' || currentStatus === 'partial') && isEditing && (
+            {(currentStatus === 'partial' || (existingInvoice?.status === 'sent' && currentStatus !== 'paid')) && isEditing && (
               <Button onClick={() => navigate(`/invoices/${id}/payment`)} size="sm" className="flex-1 sm:flex-none h-9">
                 <CreditCard className="mr-1.5 h-4 w-4" />Record Payment
               </Button>

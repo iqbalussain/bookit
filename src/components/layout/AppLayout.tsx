@@ -1,7 +1,6 @@
 import { ReactNode, useState, useEffect, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
 import { useTheme } from 'next-themes';
 import {
@@ -16,7 +15,6 @@ import {
   Menu,
   X,
   Wallet,
-  Plus,
   Sun,
   Moon,
   ArrowRight,
@@ -44,18 +42,10 @@ const reportSubmenuItems = [
   { name: 'Aging Report', href: '/reports/aging', icon: BarChart3 },
 ];
 
-const quickActions = [
-  { name: 'New Quote', href: '/quotations/new', icon: FileText },
-  { name: 'New Invoice', href: '/invoices/new', icon: Receipt },
-  { name: 'Receive Payment', href: '/payments', icon: Wallet },
-  { name: 'Add Client', href: '/clients', icon: Users },
-];
-
 export function AppLayout({ children }: AppLayoutProps) {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [reportsOpen, setReportsOpen] = useState(location.pathname.startsWith('/reports'));
-  const [actionDockOpen, setActionDockOpen] = useState(false);
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
@@ -74,10 +64,6 @@ export function AppLayout({ children }: AppLayoutProps) {
   const toggleTheme = useCallback(() => {
     setTheme(theme === 'dark' ? 'light' : 'dark');
   }, [setTheme, theme]);
-
-  const toggleActionDock = useCallback(() => {
-    setActionDockOpen((prev) => !prev);
-  }, []);
 
   const getIsActive = (href: string | null) => {
     if (!href) return false;
@@ -243,59 +229,6 @@ export function AppLayout({ children }: AppLayoutProps) {
           )}
 
           <main className="p-4 sm:p-6 lg:p-8">{children}</main>
-        </div>
-      </div>
-
-      <div className="fixed bottom-4 left-1/2 z-40 w-full max-w-4xl -translate-x-1/2 px-4">
-        <div className="rounded-full border border-border/70 bg-card/95 px-3 py-3 shadow-2xl shadow-black/10 backdrop-blur-xl">
-          <div className="hidden sm:flex items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              {quickActions.map((action) => (
-                <Link
-                  key={action.name}
-                  to={action.href}
-                  className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/80 px-4 py-2 text-sm font-medium text-foreground transition hover:border-primary hover:bg-primary/10"
-                >
-                  <action.icon className="h-4 w-4" />
-                  {action.name}
-                </Link>
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={toggleActionDock}
-              className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_18px_70px_rgba(59,130,246,0.24)] ring-1 ring-primary/30 transition-transform duration-300 hover:-translate-y-0.5 hover:shadow-[0_20px_90px_rgba(59,130,246,0.28)] animate-pulse-glow"
-              aria-label="Toggle quick actions"
-            >
-              <Plus className="h-6 w-6" />
-            </button>
-          </div>
-
-          <div className="flex sm:hidden items-center justify-center">
-            <button
-              type="button"
-              onClick={toggleActionDock}
-              className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_18px_70px_rgba(59,130,246,0.24)] ring-1 ring-primary/30 transition-transform duration-300 hover:-translate-y-0.5 hover:shadow-[0_20px_90px_rgba(59,130,246,0.28)] animate-pulse-glow"
-              aria-label="Open quick actions"
-            >
-              <Plus className="h-6 w-6" />
-            </button>
-          </div>
-
-          {actionDockOpen && (
-            <div className="mt-3 flex flex-wrap items-center justify-center gap-2 sm:hidden">
-              {quickActions.map((action) => (
-                <Link
-                  key={action.name}
-                  to={action.href}
-                  className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/90 px-4 py-2 text-sm font-medium text-foreground transition hover:border-primary hover:bg-primary/10"
-                >
-                  <action.icon className="h-4 w-4" />
-                  {action.name}
-                </Link>
-              ))}
-            </div>
-          )}
         </div>
       </div>
     </div>

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, ReactNode } from 'react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useRemoteCollection } from '@/hooks/useRemoteCollection';
-import type { Client, Quotation, Invoice, PurchaseInvoice, BusinessSettings, Payment, Account, JournalEntry, JournalLine, Company, Voucher, VoucherType, AuditEntry, Item } from '@/types';
+import type { Client, Quotation, Invoice, PurchaseInvoice, BusinessSettings, Payment, Account, JournalEntry, JournalLine, Company, Voucher, VoucherType, AuditEntry, Item, InvoiceStatus } from '@/types';
 import { DEFAULT_ACCOUNTS } from '@/types';
 
 interface AppContextType {
@@ -45,7 +45,7 @@ interface AppContextType {
   addPayment: (payment: Payment) => void;
   getPaymentsByInvoice: (invoiceId: string) => Payment[];
   getPaymentsByClient: (clientId: string) => Payment[];
-  calculateInvoicePaymentStatus: (invoiceId: string) => 'unpaid' | 'partial' | 'paid';
+  calculateInvoicePaymentStatus: (invoiceId: string) => Extract<InvoiceStatus, 'sent' | 'partial' | 'paid'>;
 
   // Accounts & Journal
   accounts: Account[];
@@ -490,17 +490,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   // Helper function to calculate invoice payment status based on payment records
-  const calculateInvoicePaymentStatus = (invoiceId: string): 'unpaid' | 'partial' | 'paid' => {
+  const calculateInvoicePaymentStatus = (invoiceId: string): Extract<InvoiceStatus, 'sent' | 'partial' | 'paid'> => {
     const invoicePayments = getPaymentsByInvoice(invoiceId);
     const invoice = invoices.find((i) => i.id === invoiceId);
     
-    if (!invoice) return 'unpaid';
+    if (!invoice) return 'sent';
     
     const totalPaid = invoicePayments.reduce((sum, payment) => sum + payment.amount, 0);
     const invoiceTotal = invoice.netTotal;
     
     if (totalPaid === 0) {
-      return 'unpaid';
+      return 'sent';
     } else if (totalPaid < invoiceTotal) {
       return 'partial';
     } else {
