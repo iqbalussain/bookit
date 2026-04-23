@@ -45,7 +45,7 @@ interface AppContextType {
   addPayment: (payment: Payment) => void;
   getPaymentsByInvoice: (invoiceId: string) => Payment[];
   getPaymentsByClient: (clientId: string) => Payment[];
-  calculateInvoicePaymentStatus: (invoiceId: string) => 'unpaid' | 'partial' | 'paid';
+  calculateInvoicePaymentStatus: (invoiceId: string) => Extract<InvoiceStatus, 'sent' | 'partial' | 'paid'>;
 
   // Accounts & Journal
   accounts: Account[];
@@ -490,17 +490,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   // Helper function to calculate invoice payment status based on payment records
-  const calculateInvoicePaymentStatus = (invoiceId: string): 'unpaid' | 'partial' | 'paid' => {
+  const calculateInvoicePaymentStatus = (invoiceId: string): Extract<InvoiceStatus, 'sent' | 'partial' | 'paid'> => {
     const invoicePayments = getPaymentsByInvoice(invoiceId);
     const invoice = invoices.find((i) => i.id === invoiceId);
     
-    if (!invoice) return 'unpaid';
+    if (!invoice) return 'sent';
     
     const totalPaid = invoicePayments.reduce((sum, payment) => sum + payment.amount, 0);
     const invoiceTotal = invoice.netTotal;
     
     if (totalPaid === 0) {
-      return 'unpaid';
+      return 'sent';
     } else if (totalPaid < invoiceTotal) {
       return 'partial';
     } else {
