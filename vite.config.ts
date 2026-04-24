@@ -20,7 +20,6 @@ export default defineConfig({
     outDir: "dist",
     emptyOutDir: true,
     sourcemap: false,
-    brotliSize: false,
     target: "es2020",
     minify: "esbuild" as const,
     cssCodeSplit: true,

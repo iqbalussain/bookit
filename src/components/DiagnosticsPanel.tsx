@@ -130,7 +130,7 @@ export const DiagnosticsPanel: React.FC = () => {
       )}
 
       {diagnostics.warnings > 0 && (
-        <Alert variant="warning">
+        <Alert variant="default">
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>
             {diagnostics.warnings} warning(s) found. Application may work with reduced functionality.
