@@ -1,3 +1,4 @@
+// @ts-ignore - jest-dom extends expect at runtime
 import "@testing-library/jest-dom";
 
 Object.defineProperty(window, "matchMedia", {

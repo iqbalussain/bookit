@@ -23,9 +23,10 @@ export const DiagnosticsPanel: React.FC = () => {
   const loadDiagnostics = async () => {
     setLoading(true);
     try {
-      if (window.electron) {
-        const info = await window.electron.ipcRenderer.invoke('get-diagnostic-info');
-        const logData = await window.electron.ipcRenderer.invoke('get-diagnostic-logs');
+      const w = window as any;
+      if (w.electron) {
+        const info = await w.electron.ipcRenderer.invoke('get-diagnostic-info');
+        const logData = await w.electron.ipcRenderer.invoke('get-diagnostic-logs');
         setDiagnostics(info);
         setLogs(Array.isArray(logData) ? logData : []);
       }
@@ -38,8 +39,9 @@ export const DiagnosticsPanel: React.FC = () => {
 
   const handleExportLogs = async () => {
     try {
-      if (window.electron) {
-        const result = await window.electron.ipcRenderer.invoke('export-diagnostics');
+      const w = window as any;
+      if (w.electron) {
+        const result = await w.electron.ipcRenderer.invoke('export-diagnostics');
         if (result.success) {
           alert(`Diagnostics exported to:\n${result.path}`);
         } else if (!result.canceled) {
@@ -53,8 +55,9 @@ export const DiagnosticsPanel: React.FC = () => {
 
   const handleOpenLogsFolder = async () => {
     try {
-      if (window.electron) {
-        const result = await window.electron.ipcRenderer.invoke('open-logs-folder');
+      const w = window as any;
+      if (w.electron) {
+        const result = await w.electron.ipcRenderer.invoke('open-logs-folder');
         if (result.success) {
           alert(`Logs folder opened:\n${result.path}`);
         } else {

@@ -225,7 +225,7 @@ export default function Dashboard() {
                 <CardTitle className="text-base">Alerts</CardTitle>
                 <p className="text-sm text-muted-foreground">Priority actions to keep operations smooth.</p>
               </div>
-              <Badge className="text-xs">Live</Badge>
+              <Badge variant="secondary">Live</Badge>
             </div>
             <div className="mt-6 space-y-4">
               <div className="rounded-3xl border border-border/60 bg-card/90 p-4">
