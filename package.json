@@ -1,6 +1,6 @@
 {
   "name": "vite_react_shadcn_ts",
-  "version": "12.1.0",
+  "version": "13.0",
   "private": true,
   "main": "main.js",
   "homepage": "./",
@@ -18,7 +18,7 @@
     "electron-dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron .\"",
     "start": "electron-forge start",
     "package": "electron-forge package",
-    "make": "electron-forge make"
+    "make": "electron-forge make --platform=win32"
   },
   "dependencies": {
     "@electron/rebuild": "^4.0.3",
@@ -55,6 +55,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "date-fns": "^3.6.0",
+    "electron-squirrel-startup": "^1.0.1",
     "embla-carousel-react": "^8.6.0",
     "framer-motion": "^12.38.0",
     "input-otp": "^1.4.2",
@@ -80,7 +81,9 @@
     "@electron-forge/maker-rpm": "^7.11.1",
     "@electron-forge/maker-squirrel": "^7.11.1",
     "@electron-forge/maker-zip": "^7.11.1",
-    "@electron/packager": "^19.1.0",
+    "@electron-forge/plugin-auto-unpack-natives": "^7.11.1",
+    "@electron-forge/plugin-fuses": "^7.11.1",
+    "@electron/fuses": "^1.8.0",
     "@eslint/js": "^9.32.0",
     "@tailwindcss/typography": "^0.5.16",
     "@testing-library/jest-dom": "^6.6.0",
@@ -92,7 +95,6 @@
     "autoprefixer": "^10.4.21",
     "concurrently": "^9.2.1",
     "electron": "^28.0.0",
-    "electron-builder": "^26.8.1",
     "electron-rebuild": "^3.2.9",
     "eslint": "^9.32.0",
     "eslint-plugin-react-hooks": "^5.2.0",

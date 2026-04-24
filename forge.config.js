@@ -1,46 +1,40 @@
-const path = require('path');
+const { FusesPlugin } = require('@electron-forge/plugin-fuses');
+const { FuseV1Options, FuseVersion } = require('@electron/fuses');
 
 module.exports = {
   packagerConfig: {
     asar: true,
-    icon: path.join(__dirname, 'public/favicon'),
-    win32metadata: {
-      CompanyName: 'BookIt',
-      FileDescription: 'Desktop Invoice and Accounting Management System',
-      OriginalFilename: 'BookItSetup.exe',
-      ProductName: 'BookIt',
-      InternalName: 'BookIt',
-    },
   },
+
+  rebuildConfig: {},
+
   makers: [
     {
       name: '@electron-forge/maker-squirrel',
       config: {
-        name: 'BookIt',
-        authors: 'BookIt Team',
-        exe: 'BookIt.exe',
-        setupExe: 'BookItSetup.exe',
-        setupIcon: path.join(__dirname, 'public/favicon.ico'),
-      },
-      platforms: ['win32'],
+        name: "bookit"
+      }
     },
     {
       name: '@electron-forge/maker-zip',
-      platforms: ['darwin', 'linux'],
-    },
-    {
-      name: '@electron-forge/maker-deb',
-      config: {
-        options: {
-          maintainer: 'BookIt Team',
-          homepage: 'https://bookit.local',
-        },
-      },
-      platforms: ['linux'],
+      platforms: ['win32']
     },
   ],
-  publishers: [],
-  build: {
-    resourcesUrl: '../resources/',
-  },
+
+  plugins: [
+    {
+      name: '@electron-forge/plugin-auto-unpack-natives',
+      config: {}
+    },
+
+    new FusesPlugin({
+      version: FuseVersion.V1,
+      [FuseV1Options.RunAsNode]: false,
+      [FuseV1Options.EnableCookieEncryption]: true,
+      [FuseV1Options.EnableNodeOptionsEnvironmentVariable]: false,
+      [FuseV1Options.EnableNodeCliInspectArguments]: false,
+      [FuseV1Options.EnableEmbeddedAsarIntegrityValidation]: true,
+      [FuseV1Options.OnlyLoadAppFromAsar]: true
+    })
+  ]
 };

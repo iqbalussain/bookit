@@ -26,3 +26,5 @@ dist-electron
 *.sln
 *.sw?
 dist-electron\n*.exe\n*.zip
+
+out/
