@@ -1,23 +1,45 @@
 {
   "appId": "com.bookit.app",
   "productName": "BookIt",
+
   "directories": {
     "buildResources": "public",
     "output": "dist-electron"
   },
+
   "files": [
     "dist/**/*",
     "main.js",
     "preload.js",
-    "package.json"
+    "package.json",
+    "!**/*.map",
+    "!src",
+    "!test",
+    "!docs",
+    "!*.md",
+    "!node_modules/.cache"
   ],
+
+  "asar": true,
   "asarUnpack": [
     "node_modules/sqlite3/**/*"
   ],
+
+  "compression": "maximum",
+
+  "npmRebuild": false,
+  "nodeGypRebuild": false,
+
   "win": {
-    "target": "nsis",
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64"]
+      }
+    ],
     "icon": "public/favicon.ico"
   },
+
   "nsis": {
     "oneClick": false,
     "perMachine": false,
