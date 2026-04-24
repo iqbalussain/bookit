@@ -10,7 +10,13 @@ module.exports = {
     {
       name: '@electron-forge/maker-squirrel',
       config: {
-        name: "bookit"
+        name: "BookIt",
+        authors: "Iqbal Ussain",
+        exe: 'BookIt.exe',
+        // Installer icon
+        iconUrl: 'https://via.placeholder.com/256',
+        // Setup icon  
+        setupIcon: './build/icon.ico',
       }
     },
     {

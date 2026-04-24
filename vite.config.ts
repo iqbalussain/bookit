@@ -4,6 +4,7 @@ import path from "path";
 
 export default defineConfig({
   base: "./",
+  logLevel: "warn",
 
   plugins: [react()],
 
@@ -16,28 +17,35 @@ export default defineConfig({
   },
 
   build: {
+    outDir: "dist",
+    emptyOutDir: true,
     sourcemap: false,
-
-    // FIX: use literal type safety
+    brotliSize: false,
+    target: "es2020",
     minify: "esbuild" as const,
+    cssCodeSplit: true,
+    assetsInlineLimit: 4096,
 
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ["react", "react-dom", "react-router-dom"],
-          ui: [
-            "@radix-ui/react-dialog",
-            "@radix-ui/react-select",
-            "@radix-ui/react-tabs"
-          ]
-        }
-      }
-    }
+        manualChunks(id) {
+          if (id.includes("node_modules")) {
+            if (id.includes("react") || id.includes("react-dom") || id.includes("react-router-dom") || id.includes("@tanstack/react-query")) {
+              return "vendor-react";
+            }
+            if (id.includes("@radix-ui") || id.includes("lucide-react") || id.includes("framer-motion") || id.includes("recharts") || id.includes("date-fns")) {
+              return "vendor-ui";
+            }
+            return "vendor";
+          }
+        },
+      },
+    },
   },
 
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src")
-    }
-  }
+      "@": path.resolve(__dirname, "./src"),
+    },
+  },
 });

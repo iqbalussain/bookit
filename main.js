@@ -1,485 +1,174 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
-const sqlite3 = require('sqlite3').verbose();
+const fs = require('fs');
+const { app, BrowserWindow, dialog, shell } = require('electron');
+const { autoUpdater } = require('electron-updater');
+const DiagnosticLogger = require('./diagnostic-logger');
 
-app.setName('BookIt');
-app.setAppUserModelId('com.bookit.app');
+const isDev = process.env.NODE_ENV === 'development';
+const diagnostics = new DiagnosticLogger();
+let mainWindow = null;
 
-const hasSingleInstanceLock = app.requestSingleInstanceLock();
-if (!hasSingleInstanceLock) {
-  app.quit();
+function getIndexPath() {
+  const localBuild = path.join(__dirname, 'dist', 'index.html');
+  if (fs.existsSync(localBuild)) {
+    return localBuild;
+  }
+
+  const fallbackBuild = path.join(process.resourcesPath || __dirname, 'app.asar', 'dist', 'index.html');
+  if (fs.existsSync(fallbackBuild)) {
+    return fallbackBuild;
+  }
+
+  return localBuild;
 }
 
-// Database file location - single file users can backup
-const dbPath = path.join(app.getPath('userData'), 'invoiceflow.db');
-const db = new sqlite3.Database(dbPath);
+function verifyBuildExists(indexPath) {
+  diagnostics.log('info', `Verifying local build file: ${indexPath}`);
 
-// Create your tables based on your current schema
-db.serialize(() => {
-  // Parties (Customers & Vendors)
-  db.run(`CREATE TABLE IF NOT EXISTS parties (
-    id TEXT PRIMARY KEY,
-    type TEXT,
-    name TEXT,
-    email TEXT,
-    phone TEXT,
-    address TEXT,
-    tax_number TEXT,
-    payment_terms INTEGER,
-    credit_limit REAL,
-    created_at TEXT
-  )`);
+  if (!fs.existsSync(indexPath)) {
+    diagnostics.log('error', `Production build missing at: ${indexPath}`);
+    dialog.showErrorBox(
+      'BookIt Startup Error',
+      `Unable to find the local application bundle at:\n${indexPath}\n\nRun npm run build and package again.`
+    );
+    app.quit();
+    return false;
+  }
 
-  // Line items
-  db.run(`CREATE TABLE IF NOT EXISTS line_items (
-    id TEXT PRIMARY KEY,
-    name TEXT,
-    description TEXT,
-    quantity REAL,
-    rate REAL,
-    total REAL
-  )`);
+  return true;
+}
 
-  // Quotations
-  db.run(`CREATE TABLE IF NOT EXISTS quotations (
-    id TEXT PRIMARY KEY,
-    number TEXT,
-    client_id TEXT,
-    net_total REAL,
-    vat_amount REAL DEFAULT 0,
-    total REAL,
-    status TEXT,
-    converted_invoice_id TEXT,
-    notes TEXT,
-    terms TEXT,
-    created_at TEXT,
-    updated_at TEXT,
-    FOREIGN KEY(client_id) REFERENCES parties(id)
-  )`);
+function setupAutoUpdate() {
+  if (isDev) {
+    diagnostics.log('info', 'Skipping auto-updater in development mode');
+    return;
+  }
 
-  // Quotation line items
-  db.run(`CREATE TABLE IF NOT EXISTS quotation_line_items (
-    quotation_id TEXT,
-    line_item_id TEXT,
-    FOREIGN KEY(quotation_id) REFERENCES quotations(id),
-    FOREIGN KEY(line_item_id) REFERENCES line_items(id)
-  )`);
+  diagnostics.log('info', 'Preparing auto-update architecture');
 
-  // Invoices (sales)
-  db.run(`CREATE TABLE IF NOT EXISTS invoices (
-    id TEXT PRIMARY KEY,
-    number TEXT,
-    client_id TEXT,
-    quotation_id TEXT,
-    net_total REAL,
-    vat_amount REAL DEFAULT 0,
-    total REAL,
-    status TEXT,
-    due_date TEXT,
-    notes TEXT,
-    terms TEXT,
-    created_at TEXT,
-    updated_at TEXT,
-    FOREIGN KEY(client_id) REFERENCES parties(id),
-    FOREIGN KEY(quotation_id) REFERENCES quotations(id)
-  )`);
+  autoUpdater.on('checking-for-update', () => diagnostics.log('info', 'Auto-updater: checking for update'));
+  autoUpdater.on('update-available', () => diagnostics.log('info', 'Auto-updater: update available'));
+  autoUpdater.on('update-not-available', () => diagnostics.log('info', 'Auto-updater: no update available'));
+  autoUpdater.on('download-progress', (progress) => diagnostics.log('info', `Auto-updater progress: ${Math.round(progress.percent)}%`));
+  autoUpdater.on('update-downloaded', () => diagnostics.log('info', 'Auto-updater: update downloaded - will install on quit'));
+  autoUpdater.on('error', (error) => diagnostics.log('error', `Auto-updater error: ${error?.message || error}`));
 
-  // Invoice line items
-  db.run(`CREATE TABLE IF NOT EXISTS invoice_line_items (
-    invoice_id TEXT,
-    line_item_id TEXT,
-    FOREIGN KEY(invoice_id) REFERENCES invoices(id),
-    FOREIGN KEY(line_item_id) REFERENCES line_items(id)
-  )`);
-
-  // Purchase Invoices
-  db.run(`CREATE TABLE IF NOT EXISTS purchase_invoices (
-    id TEXT PRIMARY KEY,
-    number TEXT,
-    vendor_id TEXT,
-    net_total REAL,
-    vat_amount REAL DEFAULT 0,
-    total REAL,
-    status TEXT,
-    due_date TEXT,
-    notes TEXT,
-    terms TEXT,
-    created_at TEXT,
-    updated_at TEXT,
-    FOREIGN KEY(vendor_id) REFERENCES parties(id)
-  )`);
-
-  // Purchase invoice line items
-  db.run(`CREATE TABLE IF NOT EXISTS purchase_invoice_line_items (
-    purchase_invoice_id TEXT,
-    line_item_id TEXT,
-    FOREIGN KEY(purchase_invoice_id) REFERENCES purchase_invoices(id),
-    FOREIGN KEY(line_item_id) REFERENCES line_items(id)
-  )`);
-
-  // Payments
-  db.run(`CREATE TABLE IF NOT EXISTS payments (
-    id TEXT PRIMARY KEY,
-    invoice_id TEXT,
-    invoice_type TEXT,
-    amount REAL,
-    date TEXT,
-    method TEXT,
-    reference TEXT,
-    notes TEXT,
-    created_at TEXT
-  )`);
-
-  // Chart of Accounts
-  db.run(`CREATE TABLE IF NOT EXISTS accounts (
-    id TEXT PRIMARY KEY,
-    code TEXT,
-    name TEXT,
-    type TEXT,
-    parent_id TEXT,
-    is_system INTEGER
-  )`);
-
-  // Journal Entries
-  db.run(`CREATE TABLE IF NOT EXISTS journal_entries (
-    id TEXT PRIMARY KEY,
-    date TEXT,
-    reference TEXT,
-    reference_type TEXT,
-    reference_id TEXT,
-    description TEXT,
-    created_at TEXT
-  )`);
-
-  // Journal Lines
-  db.run(`CREATE TABLE IF NOT EXISTS journal_lines (
-    journal_entry_id TEXT,
-    account_id TEXT,
-    debit REAL,
-    credit REAL,
-    description TEXT,
-    FOREIGN KEY(journal_entry_id) REFERENCES journal_entries(id),
-    FOREIGN KEY(account_id) REFERENCES accounts(id)
-  )`);
-
-  // Business Settings
-  db.run(`CREATE TABLE IF NOT EXISTS business_settings (
-    id INTEGER PRIMARY KEY CHECK (id = 1),
-    name TEXT,
-    email TEXT,
-    phone TEXT,
-    address TEXT,
-    logo TEXT,
-    currency TEXT,
-    tax_number TEXT
-  )`);
-
-  // Insert default accounts if they don't exist
-  db.get("SELECT COUNT(*) as count FROM accounts", (err, row) => {
-    if (!err && row.count === 0) {
-      const defaultAccounts = [
-        { id: 'acc-1000', code: '1000', name: 'Cash', type: 'asset', is_system: 1 },
-        { id: 'acc-1010', code: '1010', name: 'Bank', type: 'asset', is_system: 1 },
-        { id: 'acc-1100', code: '1100', name: 'Accounts Receivable', type: 'asset', is_system: 1 },
-        { id: 'acc-2000', code: '2000', name: 'Accounts Payable', type: 'liability', is_system: 1 },
-        { id: 'acc-3000', code: '3000', name: "Owner's Equity", type: 'equity', is_system: 1 },
-        { id: 'acc-3100', code: '3100', name: 'Retained Earnings', type: 'equity', is_system: 1 },
-        { id: 'acc-4000', code: '4000', name: 'Sales Revenue', type: 'income', is_system: 1 },
-        { id: 'acc-5000', code: '5000', name: 'General Expenses', type: 'expense', is_system: 1 },
-        { id: 'acc-5100', code: '5100', name: 'Cost of Goods', type: 'expense', is_system: 1 },
-      ];
-
-      const stmt = db.prepare("INSERT INTO accounts (id, code, name, type, is_system) VALUES (?, ?, ?, ?, ?)");
-      defaultAccounts.forEach(account => {
-        stmt.run(account.id, account.code, account.name, account.type, account.is_system);
-      });
-      stmt.finalize();
-    }
-  });
-});
-
-let mainWindow;
+  autoUpdater.checkForUpdatesAndNotify().catch((error) => diagnostics.log('error', `Auto-updater failed: ${error?.message || error}`));
+}
 
 function createWindow() {
+  diagnostics.log('info', 'Creating application window...');
+
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     minWidth: 1024,
     minHeight: 700,
     autoHideMenuBar: true,
+    show: false,
     webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js')
+      sandbox: true,
+      devTools: isDev,
+    },
+  });
+
+  mainWindow.once('ready-to-show', () => {
+    diagnostics.log('info', 'Window is ready to show');
+    mainWindow.show();
+  });
+
+  mainWindow.webContents.on('did-finish-load', () => diagnostics.log('info', 'Renderer finished loading'));
+
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+    diagnostics.log('warn', `Failed to load ${validatedURL} (${errorCode}): ${errorDescription}`);
+    if (isMainFrame) {
+      const indexPath = getIndexPath();
+      if (verifyBuildExists(indexPath)) {
+        mainWindow.loadFile(indexPath).catch((error) => diagnostics.log('error', `Reload failed: ${error.message}`));
+      }
     }
   });
 
-  // Load the app
-  if (process.env.NODE_ENV === 'development') {
-    mainWindow.loadURL('http://localhost:5173');
+  mainWindow.webContents.on('crashed', () => {
+    diagnostics.log('error', 'Renderer process crashed');
+    dialog.showErrorBox('App Crashed', 'BookIt has crashed. Please restart the application.');
+  });
+
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('http')) {
+      shell.openExternal(url);
+      return { action: 'deny' };
+    }
+    return { action: 'allow' };
+  });
+
+  mainWindow.on('closed', () => {
+    diagnostics.log('info', 'Main window closed');
+    mainWindow = null;
+    diagnostics.logSessionEnd();
+  });
+
+  const indexPath = getIndexPath();
+  if (!verifyBuildExists(indexPath)) {
+    return;
+  }
+
+  if (isDev) {
+    diagnostics.log('info', 'Loading development server at http://localhost:5173');
+    mainWindow.loadURL('http://localhost:5173').catch((error) => diagnostics.log('error', `Dev load failed: ${error.message}`));
     mainWindow.webContents.openDevTools();
   } else {
-    mainWindow.loadFile(path.join(__dirname, 'dist/index.html'));
+    diagnostics.log('info', `Loading local production build from: ${indexPath}`);
+    mainWindow.loadFile(indexPath).catch((error) => {
+      diagnostics.log('error', `Production load failed: ${error.message}`);
+      dialog.showErrorBox('Startup Failed', `Unable to load BookIt UI: ${error.message}`);
+      app.quit();
+    });
   }
 }
 
-app.whenReady().then(createWindow);
+function initializeApp() {
+  app.setAppUserModelId('com.bookit.app');
+  app.disableHardwareAcceleration();
 
-app.on('second-instance', () => {
-  if (!mainWindow) return;
-  if (mainWindow.isMinimized()) mainWindow.restore();
-  mainWindow.focus();
-});
-
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
+  if (!app.requestSingleInstanceLock()) {
+    diagnostics.log('warn', 'Another instance is already running');
     app.quit();
+    return;
   }
-});
 
-app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
-  }
-});
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
 
-// IPC handlers for database operations
-ipcMain.handle('db-query', async (event, sql, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(rows);
-      }
+  app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') app.quit();
+  });
+
+  app.on('activate', () => {
+    if (!mainWindow) createWindow();
+  });
+
+  app.whenReady()
+    .then(() => {
+      diagnostics.logAppStart();
+      setupAutoUpdate();
+      createWindow();
+    })
+    .catch((error) => {
+      diagnostics.logError(error, 'app-ready');
+      dialog.showErrorBox('BookIt Startup Error', `Unable to start BookIt: ${error.message}`);
+      app.quit();
     });
-  });
-});
 
-ipcMain.handle('get-parties', async () => {
-  return new Promise((resolve, reject) => {
-    db.all('SELECT * FROM parties', (err, rows) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(rows);
-      }
-    });
-  });
-});
+  process.on('uncaughtException', (error) => diagnostics.logError(error, 'uncaughtException'));
+  process.on('unhandledRejection', (reason) => diagnostics.log('error', `Unhandled Promise rejection: ${reason}`));
+}
 
-ipcMain.handle('save-invoice', async (event, invoice) => {
-  return new Promise((resolve, reject) => {
-    const { id, number, client_id, quotation_id, net_total, vat_amount, total, status, due_date, notes, terms, created_at, updated_at } = invoice;
-    db.run(
-      `INSERT OR REPLACE INTO invoices (id, number, client_id, quotation_id, net_total, vat_amount, total, status, due_date, notes, terms, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, number, client_id, quotation_id, net_total, vat_amount || 0, total || net_total, status, due_date, notes, terms, created_at, updated_at],
-      function(err) {
-        if (err) {
-          reject(err);
-        } else {
-          resolve({ id: id || this.lastID });
-        }
-      }
-    );
-  });
-});
-
-ipcMain.handle('get-invoices', async () => {
-  return new Promise((resolve, reject) => {
-    db.all('SELECT * FROM invoices', (err, rows) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(rows);
-      }
-    });
-  });
-});
-
-ipcMain.handle('save-quotation', async (event, quotation) => {
-  return new Promise((resolve, reject) => {
-    const { id, number, client_id, net_total, vat_amount, total, status, converted_invoice_id, notes, terms, created_at, updated_at } = quotation;
-    db.run(
-      `INSERT OR REPLACE INTO quotations (id, number, client_id, net_total, vat_amount, total, status, converted_invoice_id, notes, terms, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, number, client_id, net_total, vat_amount || 0, total || net_total, status, converted_invoice_id, notes, terms, created_at, updated_at],
-      function(err) {
-        if (err) {
-          reject(err);
-        } else {
-          resolve({ id: id || this.lastID });
-        }
-      }
-    );
-  });
-});
-
-ipcMain.handle('get-quotations', async () => {
-  return new Promise((resolve, reject) => {
-    db.all('SELECT * FROM quotations', (err, rows) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(rows);
-      }
-    });
-  });
-});
-
-ipcMain.handle('save-purchase-invoice', async (event, purchaseInvoice) => {
-  return new Promise((resolve, reject) => {
-    const { id, number, vendor_id, net_total, vat_amount, total, status, due_date, notes, terms, created_at, updated_at } = purchaseInvoice;
-    db.run(
-      `INSERT OR REPLACE INTO purchase_invoices (id, number, vendor_id, net_total, vat_amount, total, status, due_date, notes, terms, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, number, vendor_id, net_total, vat_amount || 0, total || net_total, status, due_date, notes, terms, created_at, updated_at],
-      function(err) {
-        if (err) {
-          reject(err);
-        } else {
-          resolve({ id: id || this.lastID });
-        }
-      }
-    );
-  });
-});
-
-ipcMain.handle('get-purchase-invoices', async () => {
-  return new Promise((resolve, reject) => {
-    db.all('SELECT * FROM purchase_invoices', (err, rows) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(rows);
-      }
-    });
-  });
-});
-
-ipcMain.handle('save-payment', async (event, payment) => {
-  return new Promise((resolve, reject) => {
-    const { id, invoice_id, invoice_type, amount, date, method, reference, notes, created_at } = payment;
-    db.run(
-      `INSERT OR REPLACE INTO payments (id, invoice_id, invoice_type, amount, date, method, reference, notes, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, invoice_id, invoice_type, amount, date, method, reference, notes, created_at],
-      function(err) {
-        if (err) {
-          reject(err);
-        } else {
-          resolve({ id: id || this.lastID });
-        }
-      }
-    );
-  });
-});
-
-ipcMain.handle('get-payments', async () => {
-  return new Promise((resolve, reject) => {
-    db.all('SELECT * FROM payments', (err, rows) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(rows);
-      }
-    });
-  });
-});
-
-ipcMain.handle('get-accounts', async () => {
-  return new Promise((resolve, reject) => {
-    db.all('SELECT * FROM accounts', (err, rows) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(rows);
-      }
-    });
-  });
-});
-
-ipcMain.handle('save-account', async (event, account) => {
-  return new Promise((resolve, reject) => {
-    const { id, code, name, type, parent_id, is_system } = account;
-    db.run(
-      `INSERT OR REPLACE INTO accounts (id, code, name, type, parent_id, is_system)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [id, code, name, type, parent_id, is_system],
-      function(err) {
-        if (err) {
-          reject(err);
-        } else {
-          resolve({ id: id || this.lastID });
-        }
-      }
-    );
-  });
-});
-
-ipcMain.handle('get-business-settings', async () => {
-  return new Promise((resolve, reject) => {
-    db.get('SELECT * FROM business_settings WHERE id = 1', (err, row) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(row);
-      }
-    });
-  });
-});
-
-ipcMain.handle('save-business-settings', async (event, settings) => {
-  return new Promise((resolve, reject) => {
-    const { name, email, phone, address, logo, currency, tax_number } = settings;
-    db.run(
-      `INSERT OR REPLACE INTO business_settings (id, name, email, phone, address, logo, currency, tax_number)
-       VALUES (1, ?, ?, ?, ?, ?, ?, ?)`,
-      [name, email, phone, address, logo, currency, tax_number],
-      function(err) {
-        if (err) {
-          reject(err);
-        } else {
-          resolve();
-        }
-      }
-    );
-  });
-});
-
-// Dialog handlers
-ipcMain.handle('show-save-dialog', async (event, options) => {
-  return dialog.showSaveDialog(mainWindow, options);
-});
-
-ipcMain.handle('get-db-path', () => {
-  return dbPath;
-});
-
-// Backup/Restore handlers
-ipcMain.handle('backup-db', async (event, destinationPath) => {
-  const fs = require('fs');
-  return new Promise((resolve, reject) => {
-    fs.copyFile(dbPath, destinationPath, (err) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve();
-      }
-    });
-  });
-});
-
-ipcMain.handle('restore-db', async (event, backupPath) => {
-  const fs = require('fs');
-  return new Promise((resolve, reject) => {
-    fs.copyFile(backupPath, dbPath, (err) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve();
-      }
-    });
-  });
-});
+initializeApp();
