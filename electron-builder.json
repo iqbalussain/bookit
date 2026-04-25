@@ -51,6 +51,7 @@
     "createDesktopShortcut": true,
     "createStartMenuShortcut": true,
     "deleteAppDataOnUninstall": false,
+    "compression": "ultra",
     "artifactName": "${productName} Setup ${version}.exe"
   }
 }
