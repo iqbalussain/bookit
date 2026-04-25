@@ -11,6 +11,7 @@ import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, end
 import { ArrowLeft, CalendarIcon, Download, FileDown } from 'lucide-react';
 import { currencySymbols } from '@/types';
 import type { AccountType } from '@/types';
+import { getLedgerBreakdown } from '@/lib/accounting';
 
 const typeColors: Record<AccountType, string> = {
   asset: 'bg-primary/10 text-primary',
@@ -48,25 +49,7 @@ export default function AccountStatement() {
   const transactions = useMemo(() => {
     if (!account) return [];
 
-    const items: { date: string; reference: string; referenceType: string; description: string; debit: number; credit: number }[] = [];
-
-    journalEntries.forEach((entry) => {
-      entry.lines.forEach((line) => {
-        if (line.accountId === account.id) {
-          items.push({
-            date: entry.date,
-            reference: entry.reference,
-            referenceType: entry.referenceType,
-            description: line.description || entry.description,
-            debit: line.debit,
-            credit: line.credit,
-          });
-        }
-      });
-    });
-
-    items.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    return items;
+    return getLedgerBreakdown(account.id, journalEntries);
   }, [account, journalEntries]);
 
   const { filteredTransactions, openingBalance, totalDebits, totalCredits, closingBalance } = useMemo(() => {

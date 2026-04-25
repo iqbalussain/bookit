@@ -1,8 +1,15 @@
-import React, { createContext, useContext, ReactNode, useEffect } from 'react';
+import React, { createContext, useContext, ReactNode, useEffect, useMemo } from 'react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useRemoteCollection } from '@/hooks/useRemoteCollection';
 import type { Client, Quotation, Invoice, PurchaseInvoice, BusinessSettings, Payment, Account, JournalEntry, JournalLine, Company, Voucher, VoucherType, AuditEntry, Item, InvoiceStatus } from '@/types';
 import { buildSalesInvoicePostingEntry, repostSalesInvoice as buildSalesInvoiceRepostEntries } from '@/lib/postingEngine';
+import {
+  applyJournalLinesToBalances,
+  assertBalancedLines,
+  buildBalancesFromJournalEntries,
+  getNetBalanceForAccount,
+  type AccountBalanceStore,
+} from '@/lib/accounting';
 import type { Salesman } from '@/types';
 import { DEFAULT_ACCOUNTS } from '@/types';
 
@@ -74,11 +81,22 @@ interface AppContextType {
 
   // Journal
   journalEntries: JournalEntry[];
+  accountBalances: AccountBalanceStore;
   createJournalEntry: (entry: JournalEntry) => void;
   postJournalForReference: (entry: JournalEntry) => JournalEntry;
+  postTransactionEntry: (input: {
+    date: string;
+    reference: string;
+    referenceType: JournalEntry['referenceType'];
+    referenceId: string;
+    description: string;
+    lines: JournalLine[];
+    idempotencyKey?: string;
+  }) => JournalEntry;
   reverseJournalForReference: (referenceType: JournalEntry['referenceType'], referenceId: string) => JournalEntry[];
   postSalesInvoice: (invoice: Invoice) => JournalEntry;
   repostSalesInvoice: (invoiceBefore: Invoice, invoiceAfter: Invoice) => JournalEntry[];
+  reconcileJournalBalances: () => void;
   getAccountBalance: (accountId: string) => number;
   
   // Company management
@@ -139,6 +157,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [payments, setPayments] = useRemoteCollection<Payment>('payments', companyKey('payments'), []);
   const [accounts, setAccounts] = useRemoteCollection<Account>('accounts', companyKey('accounts'), DEFAULT_ACCOUNTS);
   const [journalEntries, setJournalEntries] = useRemoteCollection<JournalEntry>('journalEntries', companyKey('journal_entries'), []);
+  const [accountBalances, setAccountBalances] = useRemoteCollection<AccountBalanceStore>('accountBalances', companyKey('account_balances'), {});
   const [vouchers, setVouchers] = useRemoteCollection<Voucher>('vouchers', companyKey('vouchers'), []);
   const [items, setItems] = useRemoteCollection<Item>('items', companyKey('items'), []);
   const [salesmen, setSalesmen] = useRemoteCollection<Salesman>('salesmen', companyKey('salesmen'), []);
@@ -420,15 +439,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Journal operations
   const createJournalEntry = (entry: JournalEntry) => {
-    const totalDebit  = entry.lines.reduce((s, l) => s + l.debit,  0);
-    const totalCredit = entry.lines.reduce((s, l) => s + l.credit, 0);
-    if (Math.abs(totalDebit - totalCredit) > 0.001) {
-      const diff = Math.abs(totalDebit - totalCredit).toFixed(2);
-      throw new Error(
-        `Journal entry is unbalanced by ${diff} (debits: ${totalDebit.toFixed(2)}, credits: ${totalCredit.toFixed(2)})`
-      );
-    }
+    assertBalancedLines(entry.lines, 'Journal entry is unbalanced');
     setJournalEntries((prev) => [...prev, entry]);
+    setAccountBalances((prev) => applyJournalLinesToBalances(entry.lines, prev));
     addAuditEntry({
       type: 'account',
       action: 'created',
@@ -447,6 +460,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     createJournalEntry(entry);
     return entry;
+  };
+
+  const postTransactionEntry = (input: {
+    date: string;
+    reference: string;
+    referenceType: JournalEntry['referenceType'];
+    referenceId: string;
+    description: string;
+    lines: JournalLine[];
+    idempotencyKey?: string;
+  }): JournalEntry => {
+    const entry: JournalEntry = {
+      id: crypto.randomUUID(),
+      date: input.date,
+      reference: input.reference,
+      referenceType: input.referenceType,
+      referenceId: input.referenceId,
+      description: input.description,
+      lines: input.lines,
+      createdAt: new Date().toISOString(),
+      idempotencyKey: input.idempotencyKey,
+    };
+    return postJournalForReference(entry);
   };
 
   const reverseJournalForReference = (
@@ -501,21 +537,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addJournalVoucher = (voucher: Voucher, lines: JournalLine[]) => {
     setVouchers((prev) => [...prev, voucher]);
-    const totalDebit = lines.reduce((s, l) => s + l.debit, 0);
-    const totalCredit = lines.reduce((s, l) => s + l.credit, 0);
-    if (Math.abs(totalDebit - totalCredit) > 0.001) {
-      throw new Error(`Journal voucher unbalanced (Dr ${totalDebit.toFixed(2)} vs Cr ${totalCredit.toFixed(2)})`);
-    }
-    setJournalEntries((prev) => [...prev, {
-      id: crypto.randomUUID(),
+    assertBalancedLines(lines, 'Journal voucher is unbalanced');
+    postTransactionEntry({
       date: voucher.date,
       reference: voucher.number,
       referenceType: 'journal',
       referenceId: voucher.id,
       description: voucher.narration || `Journal Voucher ${voucher.number}`,
       lines,
-      createdAt: new Date().toISOString(),
-    }]);
+      idempotencyKey: `journal:${voucher.id}`,
+    });
     addAuditEntry({
       type: 'voucher', action: 'created', target: voucher.number,
       details: 'Journal voucher posted', value: voucher.amount,
@@ -541,17 +572,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setItems((prev) => prev.map((i) => (i.id === itemId ? { ...i, stock: i.stock + delta } : i)));
   };
   
-  const getAccountBalance = (accountId: string) => {
-    let balance = 0;
-    journalEntries.forEach((entry) => {
-      entry.lines.forEach((line) => {
-        if (line.accountId === accountId) {
-          balance += line.debit - line.credit;
-        }
-      });
+  const accountsById = useMemo(
+    () => new Map(accounts.map((account) => [account.id, account])),
+    [accounts],
+  );
+
+  const reconcileJournalBalances = () => {
+    const rebuilt = buildBalancesFromJournalEntries(journalEntries);
+    const trackedAccounts = new Set([...Object.keys(rebuilt), ...Object.keys(accountBalances)]);
+    const mismatch = [...trackedAccounts].some((accountId) => {
+      const cached = accountBalances[accountId] ?? { debit: 0, credit: 0 };
+      const fresh = rebuilt[accountId] ?? { debit: 0, credit: 0 };
+      return Math.abs(cached.debit - fresh.debit) > 0.001 || Math.abs(cached.credit - fresh.credit) > 0.001;
     });
-    return balance;
+    if (mismatch) {
+      setAccountBalances(rebuilt);
+    }
   };
+
+  useEffect(() => {
+    reconcileJournalBalances();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [journalEntries]);
+
+  const getAccountBalance = (accountId: string) =>
+    getNetBalanceForAccount(accountId, accountsById, accountBalances);
 
   // Company operations
   const createCompany = (name: string) => {
@@ -576,7 +621,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
 
     try {
-      const keys = ['clients', 'quotations', 'invoices', 'purchase_invoices', 'payments', 'accounts', 'journal_entries', 'settings', 'vouchers', 'items', 'audit_log'];
+      const keys = ['clients', 'quotations', 'invoices', 'purchase_invoices', 'payments', 'accounts', 'journal_entries', 'account_balances', 'settings', 'vouchers', 'items', 'audit_log'];
       keys.forEach(k => window.localStorage.removeItem(`app_${k}_${id}`));
     } catch (error) {
       console.warn('Failed to remove company data', error);
@@ -872,7 +917,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         purchaseInvoices, setPurchaseInvoices, addPurchaseInvoice, updatePurchaseInvoice, deletePurchaseInvoice, getPurchaseInvoice, generatePurchaseInvoiceNumber,
         payments, addPayment, getPaymentsByInvoice, getPaymentsByClient, calculateInvoicePaymentStatus,
         accounts, setAccounts, addAccount, deleteAccount,
-        journalEntries, createJournalEntry, postJournalForReference, reverseJournalForReference, postSalesInvoice, repostSalesInvoice, getAccountBalance,
+        journalEntries, accountBalances, createJournalEntry, postJournalForReference, postTransactionEntry, reverseJournalForReference, postSalesInvoice, repostSalesInvoice, reconcileJournalBalances, getAccountBalance,
         vouchers, addVoucher, generateVoucherNumber,
         addJournalVoucher,
         items, addItem, updateItem, deleteItem, getItem, adjustItemStock,

@@ -19,7 +19,7 @@ type LoanReceivedType = 'bank_loan' | 'personal_loan' | 'others';
 export default function LoanReceivedVoucher() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { clients, accounts, addVoucher, generateVoucherNumber, createJournalEntry, settings } = useApp();
+  const { clients, accounts, addVoucher, generateVoucherNumber, postTransactionEntry, settings } = useApp();
   const currencySymbol = currencySymbols[settings.currency];
 
   const [voucherNumber] = useState(() => generateVoucherNumber('loan_received'));
@@ -52,15 +52,15 @@ export default function LoanReceivedVoucher() {
     });
 
     try {
-      createJournalEntry({
-        id: crypto.randomUUID(), date, reference: voucherNumber,
-        referenceType: 'loan_received' as const, referenceId: voucherId,
+      postTransactionEntry({
+        date, reference: voucherNumber,
+        referenceType: 'loan_received', referenceId: voucherId,
         description: `Loan received from ${party?.name}`,
         lines: [
           { accountId: paymentAccountId, debit: amount, credit: 0 },
           { accountId: 'acc-2100', debit: 0, credit: amount },
         ],
-        createdAt: now,
+        idempotencyKey: `loan_received:${voucherId}`,
       });
     } catch (err) {
       console.error('[Journal] Entry failed:', err);
