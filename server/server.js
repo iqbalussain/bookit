@@ -117,6 +117,12 @@ function checkCollection(req, res) {
   return true;
 }
 
+// For future server-generated PDF endpoints, call this helper before sending the PDF buffer/stream.
+function setPdfAttachmentHeaders(res, filename) {
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+}
+
 app.get('/api/records/:collection', (req, res) => {
   if (!checkCollection(req, res)) return;
   const rows = stmtList.all(req.params.collection);

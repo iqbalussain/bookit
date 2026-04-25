@@ -64,274 +64,16 @@ function numberToWords(num: number, currency: string): string {
 }
 
 export async function generatePDF({ type, document, client, settings }: DocumentData) {
-  const currencySymbol = currencySymbols[settings.currency];
-  
-  // Create a printable HTML version
-  const printWindow = window.open('', '_blank');
-  if (!printWindow) {
-    throw new Error('POPUP_BLOCKED');
-  }
-
-  const isInvoice = type === 'invoice';
-  const invoice = isInvoice ? (document as Invoice) : null;
-
-  const html = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>${document.number}</title>
-      <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          padding: 40px;
-          color: #1a1a2e;
-          max-width: 800px;
-          margin: 0 auto;
-        }
-        .header {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          margin-bottom: 18px;
-          padding-bottom: 8px;
-          gap: 12px;
-        }
-        .logo-section { display: flex; align-items: center; gap: 12px; }
-        .logo { width: 56px; height: 56px; object-fit: contain; }
-        .business-name { font-size: 18px; font-weight: 700; color: #111827; }
-        .doc-info { text-align: right; }
-        .doc-type {
-          font-size: 16px;
-          font-weight: 700;
-          text-transform: uppercase;
-          color: ${isInvoice ? '#10b981' : '#3b82f6'};
-        }
-        .doc-number { font-size: 13px; color: #374151; margin-top: 2px; }
-        .doc-date { font-size: 12px; color: #6b7280; }
-        
-        .parties {
-          display: flex;
-          justify-content: space-between;
-          gap: 20px;
-          margin-bottom: 18px;
-        }
-        .party-section h3 {
-          font-size: 11px;
-          text-transform: uppercase;
-          color: #6b7280;
-          margin-bottom: 4px;
-        }
-        .party-name { font-size: 14px; font-weight: 700; margin-bottom: 2px; }
-        .party-details { font-size: 14px; color: #4b5563; line-height: 1.6; }
-        
-        table { 
-          width: 100%; 
-          border-collapse: collapse; 
-          margin-bottom: 30px;
-        }
-        th { 
-          background: #f3f4f6; 
-          padding: 12px 16px; 
-          text-align: left;
-          font-size: 12px;
-          text-transform: uppercase;
-          color: #6b7280;
-          letter-spacing: 0.5px;
-        }
-        th:last-child { text-align: right; }
-        td {
-          padding: 10px 8px;
-          border-bottom: 1px solid #e5e7eb;
-          font-size: 12px;
-        }
-        td:last-child { text-align: right; }
-        .item-name { font-weight: 500; }
-        .item-desc { font-size: 13px; color: #6b7280; margin-top: 2px; }
-        
-        .totals {
-          display: flex;
-          justify-content: flex-end;
-          margin-bottom: 18px;
-        }
-        .totals-box {
-          width: 220px;
-          background: #f8fafc;
-          border-radius: 6px;
-          padding: 12px;
-        }
-        .total-row { 
-          display: flex; 
-          justify-content: space-between;
-          padding: 8px 0;
-        }
-        .total-row.grand { 
-          font-size: 20px; 
-          font-weight: bold;
-          border-top: 2px solid #e5e7eb;
-          margin-top: 8px;
-          padding-top: 16px;
-          color: #1a1a2e;
-        }
-        
-        .notes-section {
-          background: #f8fafc;
-          padding: 12px;
-          border-radius: 6px;
-          margin-bottom: 14px;
-        }
-        .notes-section h4 { 
-          font-size: 12px; 
-          text-transform: uppercase;
-          color: #6b7280;
-          margin-bottom: 8px;
-        }
-        .notes-section p { font-size: 14px; color: #4b5563; line-height: 1.6; }
-        
-        .footer {
-          text-align: center;
-          padding-top: 20px;
-          border-top: 1px solid #e5e7eb;
-          font-size: 12px;
-          color: #9ca3af;
-        }
-        
-        @media print {
-          body { padding: 20px; }
-          .no-print { display: none; }
-        }
-      </style>
-    </head>
-    <body>
-      <div class="header">
-        <div class="logo-section">
-          ${settings.logo ? `<img src="${settings.logo}" class="logo" alt="Logo">` : ''}
-          <div>
-            <div class="business-name">${settings.name || 'Your Business'}</div>
-            <div style="font-size: 13px; color: #6b7280; margin-top: 4px;">
-              ${settings.email || ''}
-              ${settings.phone ? ` • ${settings.phone}<br>` : ''}
-              ${settings.address ? `${settings.address}<br>` : ''}
-              ${settings.taxNumber ? `GST: ${settings.taxNumber}` : ''}</div>
-            </div>
-          </div>
-        </div>
-        <div class="doc-info">
-          <div class="doc-type">${type}</div>
-          <div class="doc-number">${document.number}</div>
-          <div class="doc-date">Date: ${new Date(document.createdAt).toLocaleDateString('en-IN')}</div>
-          ${isInvoice && invoice ? `<div class="doc-date">Due: ${new Date(invoice.dueDate).toLocaleDateString('en-IN')}</div>` : ''}
-        </div>
-      </div>
-        <div class="party-section">
-          <h3>Bill To</h3>
-          <div class="party-name">${client?.name || 'Client'}</div>
-          <div class="party-details">
-            ${client?.email ? `${client.email}<br>` : ''}
-            ${client?.phone ? `${client.phone}<br>` : ''}
-            ${client?.address || ''}
-          </div>
-        </div>
-      </div>
-
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-        <div style="font-size:12px;color:#6b7280;">Invoice/Quote #: <strong style="color:#111827;">${document.number}</strong></div>
-        <div style="font-size:12px;color:#6b7280;">Billing Date: ${new Date(document.createdAt).toLocaleDateString('en-IN')}</div>
-        ${isInvoice && invoice ? `<div style="font-size:12px;color:#6b7280;">Due Date: ${new Date(invoice.dueDate).toLocaleDateString('en-IN')}</div>` : ''}
-      </div>
-      
-      <table>
-        <thead>
-          <tr>
-            <th style="width: 50px;">S.No</th>
-            <th>Description</th>
-            <th style="width: 80px;">Qty</th>
-            <th style="width: 120px;">Rate</th>
-            <th style="width: 120px;">Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${document.items.map((item, index) => `
-            <tr>
-              <td>${index + 1}</td>
-              <td>
-                <div class="item-name">${item.name}</div>
-                ${item.description ? `<div class="item-desc">${item.description}</div>` : ''}
-              </td>
-              <td>${item.quantity}</td>
-              <td>${currencySymbol}${item.rate.toLocaleString('en-IN')}</td>
-              <td>${currencySymbol}${(item.total + (item.vatApplicable ? (item.vatAmount ?? 0) : 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-      
-      <div class="totals">
-        <div class="totals-box">
-          <div class="total-row">
-            <span>Subtotal</span>
-            <span>${currencySymbol}${document.items.reduce((s, i) => s + i.total, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-          </div>
-          <div class="total-row">
-            <span>VAT</span>
-            <span>${currencySymbol}${document.items.reduce((s, i) => s + (i.vatApplicable ? (i.vatAmount ?? 0) : 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-          </div>
-          <div class="total-row">
-            <span>Total After VAT</span>
-            <span>${currencySymbol}${document.netTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-          </div>
-          <div class="total-row grand">
-            <span>Grand Total</span>
-            <span>${currencySymbol}${document.netTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-          </div>
-        </div>
-      </div>
-      
-      <div style="margin-bottom: 30px; padding: 15px; background: #fafbfc; border-radius: 8px;">
-        <p style="font-size: 13px; color: #4b5563; line-height: 1.6;">
-          <strong>Amount in Words:</strong> ${numberToWords(document.netTotal, settings.currency)}
-        </p>
-      </div>
-      
-      ${(settings.bankName || settings.bankAccountNumber) ? `
-        <div class="notes-section">
-          <h4>Account Details</h4>
-          <p>
-            ${settings.bankName ? `<strong>Bank:</strong> ${settings.bankName}<br>` : ''}
-            ${settings.bankAccountNumber ? `<strong>Account No:</strong> ${settings.bankAccountNumber}` : ''}
-          </p>
-        </div>
-      ` : ''}
-
-      ${document.notes ? `
-        <div class="notes-section">
-          <h4>Notes</h4>
-          <p>${document.notes}</p>
-        </div>
-      ` : ''}
-      
-      ${document.terms ? `
-        <div class="notes-section">
-          <h4>Terms & Conditions</h4>
-          <p>${document.terms}</p>
-        </div>
-      ` : ''}
-      
-      <div class="footer">
-        Thank you for your business!
-      </div>
-      
-      <script>
-        window.onload = function() {
-          window.print();
-        }
-      </script>
-    </body>
-    </html>
-  `;
-
-  printWindow.document.write(html);
-  printWindow.document.close();
+  const pdfBlob = await generatePDFBlob({ type, document, client, settings });
+  const filename = `${type}-${document.number}.pdf`;
+  const objectUrl = window.URL.createObjectURL(pdfBlob);
+  const anchor = document.createElement('a');
+  anchor.href = objectUrl;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.URL.revokeObjectURL(objectUrl);
 }
 
 export async function shareViaWhatsApp({ type, document, client, settings }: DocumentData) {
@@ -631,5 +373,29 @@ export async function generatePDFBlob({ type, document, client, settings }: Docu
     </html>
   `;
 
-  return html;
+  const container = window.document.createElement('div');
+  container.innerHTML = html;
+  container.style.position = 'fixed';
+  container.style.left = '-10000px';
+  container.style.top = '0';
+  window.document.body.appendChild(container);
+
+  try {
+    const html2pdfModule = await import('html2pdf.js');
+    const html2pdf = (html2pdfModule.default ?? html2pdfModule) as any;
+    const worker = html2pdf()
+      .set({
+        margin: [10, 10, 10, 10],
+        filename: `${type}-${document.number}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      })
+      .from(container)
+      .toPdf();
+
+    return await worker.outputPdf('blob');
+  } finally {
+    container.remove();
+  }
 }
