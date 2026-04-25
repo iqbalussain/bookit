@@ -2,6 +2,7 @@ import React, { createContext, useContext, ReactNode, useEffect } from 'react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useRemoteCollection } from '@/hooks/useRemoteCollection';
 import type { Client, Quotation, Invoice, PurchaseInvoice, BusinessSettings, Payment, Account, JournalEntry, JournalLine, Company, Voucher, VoucherType, AuditEntry, Item, InvoiceStatus } from '@/types';
+import { buildSalesInvoicePostingEntry, repostSalesInvoice as buildSalesInvoiceRepostEntries } from '@/lib/postingEngine';
 import type { Salesman } from '@/types';
 import { DEFAULT_ACCOUNTS } from '@/types';
 
@@ -74,6 +75,10 @@ interface AppContextType {
   // Journal
   journalEntries: JournalEntry[];
   createJournalEntry: (entry: JournalEntry) => void;
+  postJournalForReference: (entry: JournalEntry) => JournalEntry;
+  reverseJournalForReference: (referenceType: JournalEntry['referenceType'], referenceId: string) => JournalEntry[];
+  postSalesInvoice: (invoice: Invoice) => JournalEntry;
+  repostSalesInvoice: (invoiceBefore: Invoice, invoiceAfter: Invoice) => JournalEntry[];
   getAccountBalance: (accountId: string) => number;
   
   // Company management
@@ -430,6 +435,50 @@ export function AppProvider({ children }: { children: ReactNode }) {
       target: entry.reference,
       details: `Journal entry recorded for ${entry.referenceType}`,
     });
+  };
+
+
+  const postJournalForReference = (entry: JournalEntry) => {
+    const duplicate = entry.idempotencyKey
+      ? journalEntries.find((existing) => existing.idempotencyKey === entry.idempotencyKey)
+      : undefined;
+    if (duplicate) {
+      return duplicate;
+    }
+    createJournalEntry(entry);
+    return entry;
+  };
+
+  const reverseJournalForReference = (
+    referenceType: JournalEntry['referenceType'],
+    referenceId: string,
+  ): JournalEntry[] => {
+    if (referenceType !== 'sales_invoice') return [];
+    const existingForRef = journalEntries.filter(
+      (entry) => entry.referenceType === referenceType && entry.referenceId === referenceId,
+    );
+    const baseInvoice = invoices.find((inv) => inv.id === referenceId);
+    if (!baseInvoice || existingForRef.length === 0) {
+      return [];
+    }
+
+    const reversals = buildSalesInvoiceRepostEntries(baseInvoice, baseInvoice, existingForRef)
+      .filter((entry) => !!entry.reversalOf);
+
+    return reversals.map((entry) => postJournalForReference(entry));
+  };
+
+  const postSalesInvoice = (invoice: Invoice): JournalEntry => {
+    const postingEntry = buildSalesInvoicePostingEntry(invoice);
+    return postJournalForReference(postingEntry);
+  };
+
+  const repostSalesInvoice = (invoiceBefore: Invoice, invoiceAfter: Invoice): JournalEntry[] => {
+    const existingForRef = journalEntries.filter(
+      (entry) => entry.referenceType === 'sales_invoice' && entry.referenceId === invoiceBefore.id,
+    );
+    const generatedEntries = buildSalesInvoiceRepostEntries(invoiceBefore, invoiceAfter, existingForRef);
+    return generatedEntries.map((entry) => postJournalForReference(entry));
   };
 
   // Voucher operations
@@ -823,7 +872,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         purchaseInvoices, setPurchaseInvoices, addPurchaseInvoice, updatePurchaseInvoice, deletePurchaseInvoice, getPurchaseInvoice, generatePurchaseInvoiceNumber,
         payments, addPayment, getPaymentsByInvoice, getPaymentsByClient, calculateInvoicePaymentStatus,
         accounts, setAccounts, addAccount, deleteAccount,
-        journalEntries, createJournalEntry, getAccountBalance,
+        journalEntries, createJournalEntry, postJournalForReference, reverseJournalForReference, postSalesInvoice, repostSalesInvoice, getAccountBalance,
         vouchers, addVoucher, generateVoucherNumber,
         addJournalVoucher,
         items, addItem, updateItem, deleteItem, getItem, adjustItemStock,

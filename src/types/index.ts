@@ -156,6 +156,8 @@ export interface JournalEntry {
   description: string;
   lines: JournalLine[];
   createdAt: string;
+  idempotencyKey?: string;
+  reversalOf?: string;
 }
 
 export interface JournalLine {

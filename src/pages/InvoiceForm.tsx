@@ -34,7 +34,7 @@ export default function InvoiceForm() {
     quotations, updateQuotation,
     clients, addClient, getClient, settings,
     generateInvoiceNumber,
-    createJournalEntry, adjustItemStock, calculateInvoicePaymentStatus,
+    postSalesInvoice, repostSalesInvoice, adjustItemStock, calculateInvoicePaymentStatus,
     salesmen, addSalesman,
   } = useApp();
 
@@ -168,7 +168,16 @@ export default function InvoiceForm() {
         salesmanId,
         updatedAt: now,
       };
-      updateInvoice(updated);
+
+      try {
+        updateInvoice(updated);
+        repostSalesInvoice(existingInvoice, updated);
+      } catch (err) {
+        updateInvoice(existingInvoice);
+        toast({ title: 'Invoice update failed', description: err instanceof Error ? err.message : String(err), variant: 'destructive' });
+        return;
+      }
+
       toast({ title: 'Invoice updated', description: `${existingInvoice.number} has been updated.` });
     } else {
       const newInvoice: Invoice = {
@@ -186,19 +195,9 @@ export default function InvoiceForm() {
         updateQuotation({ ...sourceQuotation, status: 'converted', convertedInvoiceId: newInvoice.id, updatedAt: now });
       }
 
-      // Create journal entry: Debit A/R, Credit Sales Revenue
+      // Post journal using the shared posting service
       try {
-        createJournalEntry({
-          id: crypto.randomUUID(), date: now, reference: newInvoice.number,
-          referenceType: 'sales_invoice', referenceId: newInvoice.id,
-          description: `Sales Invoice ${newInvoice.number}`,
-          lines: [
-            { accountId: 'acc-1100', debit: grandTotal, credit: 0 },
-            { accountId: 'acc-4000', debit: 0, credit: netTotal },
-            ...(vatTotal > 0 ? [{ accountId: 'acc-2000', debit: 0, credit: vatTotal }] : []),
-          ],
-          createdAt: now,
-        });
+        postSalesInvoice(newInvoice);
       } catch (err) {
         console.error('[InvoiceForm] Journal entry failed:', err);
         toast({ title: 'Journal entry failed', description: err instanceof Error ? err.message : String(err), variant: 'destructive' });
