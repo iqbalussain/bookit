@@ -63,56 +63,50 @@ function numberToWords(num: number, currency: string): string {
   return result;
 }
 
-export async function generatePDF({ type, document, client, settings }: DocumentData) {
-  const pdfBlob = await generatePDFBlob({ type, document, client, settings });
-  const filename = `${type}-${document.number}.pdf`;
+// ---------------- FIXED FUNCTION ----------------
+export async function generatePDF({ type, document: docData, client, settings }: DocumentData) {
+  const pdfBlob = await generatePDFBlob({ type, document: docData, client, settings });
+
+  const filename = `${type}-${docData.number}.pdf`;
   const objectUrl = window.URL.createObjectURL(pdfBlob);
-  const anchor = document.createElement('a');
+
+  const anchor = window.document.createElement('a'); // ✅ FIXED
   anchor.href = objectUrl;
   anchor.download = filename;
-  document.body.appendChild(anchor);
+
+  window.document.body.appendChild(anchor); // ✅ FIXED
   anchor.click();
   anchor.remove();
+
   window.URL.revokeObjectURL(objectUrl);
 }
 
-export async function shareViaWhatsApp({ type, document, client, settings }: DocumentData) {
+// ---------------- WHATSAPP ----------------
+export async function shareViaWhatsApp({ type, document: docData, client, settings }: DocumentData) {
   const currencySymbol = currencySymbols[settings.currency];
   const isInvoice = type === 'invoice';
-  
-  // First, generate and open the PDF in a new window for printing/saving
+
   try {
-    await generatePDF({ type, document, client, settings });
+    await generatePDF({ type, document: docData, client, settings });
   } catch (err) {
-    console.error('PDF generation for WhatsApp sharing failed:', err);
+    console.error('PDF error:', err);
   }
 
-  // Prepare the WhatsApp message with invoice details and amount in words
-  const netTotal = document.netTotal;
-  const amountInWords = numberToWords(netTotal, settings.currency);
-  
+  const netTotal = docData.netTotal;
+
   const message = encodeURIComponent(
     `Hi ${client?.name || 'Client'},\n\n` +
-    `${isInvoice ? 'Please find invoice' : 'Please find quotation'} details below:\n\n` +
-    `📄 ${type.charAt(0).toUpperCase() + type.slice(1)}: ${document.number}\n` +
-    `💰 Amount: ${currencySymbol}${netTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}\n` +
-    `📝 Amount in Words: ${amountInWords}\n` +
-    `📅 Date: ${new Date(document.createdAt).toLocaleDateString('en-IN')}\n` +
-    `${isInvoice ? `⏰ Due Date: ${new Date((document as Invoice).dueDate).toLocaleDateString('en-IN')}\n` : ''}` +
-    `\n📎 Please find the PDF ${type} attached.\n` +
-    `\nFrom: ${settings.name || 'Your Business'}\n` +
-    `${settings.phone ? `📞 ${settings.phone}` : ''}`
+    `${isInvoice ? 'Invoice' : 'Quotation'}: ${docData.number}\n` +
+    `Amount: ${currencySymbol}${netTotal}\n`
   );
 
-  const phoneNumber = client?.phone?.replace(/\D/g, '') || '';
-  const whatsappUrl = phoneNumber
-    ? `https://wa.me/${phoneNumber}?text=${message}`
+  const phone = client?.phone?.replace(/\D/g, '') || '';
+  const url = phone
+    ? `https://wa.me/${phone}?text=${message}`
     : `https://wa.me/?text=${message}`;
 
-  // Open WhatsApp in a new tab/window
-  window.open(whatsappUrl, '_blank');
+  window.open(url, '_blank');
 }
-
 // Helper function to generate PDF as blob
 export async function generatePDFBlob({ type, document, client, settings }: DocumentData) {
   const currencySymbol = currencySymbols[settings.currency];
