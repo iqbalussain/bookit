@@ -210,7 +210,9 @@ export async function generatePDF({ type, document, client, settings }: Document
             <div class="business-name">${settings.name || 'Your Business'}</div>
             <div style="font-size: 13px; color: #6b7280; margin-top: 4px;">
               ${settings.email || ''}
-              ${settings.phone ? ` • ${settings.phone}` : ''}
+              ${settings.phone ? ` • ${settings.phone}<br>` : ''}
+              ${settings.address ? `${settings.address}<br>` : ''}
+              ${settings.taxNumber ? `GST: ${settings.taxNumber}` : ''}</div>
             </div>
           </div>
         </div>
@@ -221,18 +223,6 @@ export async function generatePDF({ type, document, client, settings }: Document
           ${isInvoice && invoice ? `<div class="doc-date">Due: ${new Date(invoice.dueDate).toLocaleDateString('en-IN')}</div>` : ''}
         </div>
       </div>
-      
-      <div class="parties">
-        <div class="party-section">
-          <div style="display:flex;flex-direction:column;align-items:flex-start;">
-            ${settings.logo ? `<img src="${settings.logo}" class="logo" alt="Logo">` : ''}
-          </div>
-          <div>
-            <div class="party-name">${settings.name || 'Your Business'}</div>
-            <div class="party-details">${settings.address ? `${settings.address}<br>` : ''}${settings.taxNumber ? `GST: ${settings.taxNumber}` : ''}</div>
-          </div>
-        
-        </div>
         <div class="party-section">
           <h3>Bill To</h3>
           <div class="party-name">${client?.name || 'Client'}</div>
@@ -535,7 +525,9 @@ export async function generatePDFBlob({ type, document, client, settings }: Docu
             <div class="business-name">${settings.name || 'Your Business'}</div>
             <div style="font-size: 13px; color: #6b7280; margin-top: 4px;">
               ${settings.email || ''}
-              ${settings.phone ? ` • ${settings.phone}` : ''}
+              ${settings.phone ? ` • ${settings.phone}<br>` : ''}
+              ${settings.address ? `${settings.address}<br>` : ''}
+              ${settings.taxNumber ? `GST: ${settings.taxNumber}` : ''}
             </div>
           </div>
         </div>
@@ -546,16 +538,6 @@ export async function generatePDFBlob({ type, document, client, settings }: Docu
           ${isInvoice && invoice ? `<div class="doc-date">Due: ${new Date(invoice.dueDate).toLocaleDateString('en-IN')}</div>` : ''}
         </div>
       </div>
-      
-      <div class="parties">
-        <div class="party-section">
-          <h3>From</h3>
-          <div class="party-name">${settings.name || 'Your Business'}</div>
-          <div class="party-details">
-            ${settings.address ? `${settings.address}<br>` : ''}
-            ${settings.taxNumber ? `GST: ${settings.taxNumber}` : ''}
-          </div>
-        </div>
         <div class="party-section">
           <h3>Bill To</h3>
           <div class="party-name">${client?.name || 'Client'}</div>
