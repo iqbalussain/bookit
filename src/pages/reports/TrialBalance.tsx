@@ -2,21 +2,21 @@ import { useMemo } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { currencySymbols } from '@/types';
+import { getNetBalanceForAccount } from '@/lib/accounting';
 
 export default function TrialBalance() {
-  const { journalEntries, accounts, settings } = useApp();
+  const { accountBalances, accounts, settings } = useApp();
   const currencySymbol = currencySymbols[settings.currency];
 
   const { rows, totalDebit, totalCredit } = useMemo(() => {
+    const accountsById = new Map(accounts.map((account) => [account.id, account]));
     const rows = accounts.map((acc) => {
-      let debit = 0, credit = 0;
-      journalEntries.forEach((e) => e.lines.forEach((l) => { if (l.accountId === acc.id) { debit += l.debit; credit += l.credit; } }));
-      const net = debit - credit;
+      const net = getNetBalanceForAccount(acc.id, accountsById, accountBalances);
       return { ...acc, debit: net > 0 ? net : 0, credit: net < 0 ? Math.abs(net) : 0 };
     }).filter((r) => r.debit !== 0 || r.credit !== 0);
 
     return { rows, totalDebit: rows.reduce((s, r) => s + r.debit, 0), totalCredit: rows.reduce((s, r) => s + r.credit, 0) };
-  }, [journalEntries, accounts]);
+  }, [accountBalances, accounts]);
 
   return (
     <div className="space-y-3 pb-20 lg:pb-4 max-w-2xl mx-auto">

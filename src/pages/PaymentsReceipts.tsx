@@ -19,7 +19,7 @@ export default function PaymentsReceipts() {
   const {
     clients, invoices, purchaseInvoices, payments,
     addPayment, updateInvoice, updatePurchaseInvoice,
-    getClient, settings, createJournalEntry, calculateInvoicePaymentStatus,
+    getClient, settings, postTransactionEntry, calculateInvoicePaymentStatus,
   } = useApp();
 
   const currencySymbol = currencySymbols[settings.currency];
@@ -89,15 +89,15 @@ export default function PaymentsReceipts() {
 
     if (mode === 'receipt') {
       // Journal: Debit Cash/Bank, Credit A/R
-      createJournalEntry({
-        id: crypto.randomUUID(), date, reference: `REC-${selectedInvoiceId.slice(0, 8)}`,
+      postTransactionEntry({
+        date, reference: `REC-${payment.id.slice(0, 8)}`,
         referenceType: 'receipt', referenceId: payment.id,
         description: `Receipt from ${getClient(partyId)?.name}`,
         lines: [
           { accountId: paymentAccountId, debit: amount, credit: 0 },
           { accountId: 'acc-1100', debit: 0, credit: amount },
         ],
-        createdAt: now,
+        idempotencyKey: `receipt:${payment.id}`,
       });
 
       const inv = invoices.find((i) => i.id === selectedInvoiceId);
@@ -110,15 +110,15 @@ export default function PaymentsReceipts() {
       }
     } else {
       // Journal: Debit A/P, Credit Cash/Bank
-      createJournalEntry({
-        id: crypto.randomUUID(), date, reference: `PAY-${selectedInvoiceId.slice(0, 8)}`,
+      postTransactionEntry({
+        date, reference: `PAY-${payment.id.slice(0, 8)}`,
         referenceType: 'payment', referenceId: payment.id,
         description: `Payment to ${getClient(partyId)?.name}`,
         lines: [
           { accountId: 'acc-2000', debit: amount, credit: 0 },
           { accountId: paymentAccountId, debit: 0, credit: amount },
         ],
-        createdAt: now,
+        idempotencyKey: `payment:${payment.id}`,
       });
 
       const pi = purchaseInvoices.find((p) => p.id === selectedInvoiceId);

@@ -26,7 +26,7 @@ export default function PurchaseInvoiceForm() {
   const isMobile = useIsMobile();
   const {
     purchaseInvoices, addPurchaseInvoice, updatePurchaseInvoice,
-    getVendors, getClient, settings, generatePurchaseInvoiceNumber, createJournalEntry, adjustItemStock,
+    getVendors, getClient, settings, generatePurchaseInvoiceNumber, postTransactionEntry, adjustItemStock,
   } = useApp();
 
   const isEditing = id && id !== 'new';
@@ -128,17 +128,18 @@ export default function PurchaseInvoiceForm() {
       // Increment stock for purchased items
       items.forEach((li) => { if (li.itemId) adjustItemStock(li.itemId, li.quantity); });
 
-      // Journal: Debit Expense, Credit A/P
-      createJournalEntry({
-        id: crypto.randomUUID(), date: now, reference: pi.number,
-        referenceType: 'purchase_invoice', referenceId: pi.id,
+      postTransactionEntry({
+        date: now,
+        reference: pi.number,
+        referenceType: 'purchase_invoice',
+        referenceId: pi.id,
         description: `Purchase Invoice ${pi.number}`,
         lines: [
           { accountId: 'acc-5000', debit: netTotal, credit: 0 },
           ...(vatTotal > 0 ? [{ accountId: 'acc-1100', debit: vatTotal, credit: 0 }] : []),
           { accountId: 'acc-2000', debit: 0, credit: grandTotal },
         ],
-        createdAt: now,
+        idempotencyKey: `purchase_invoice:${pi.id}:${pi.updatedAt}`,
       });
 
       toast({ title: 'Bill created', description: `${pi.number} created.` });

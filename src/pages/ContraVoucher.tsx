@@ -19,7 +19,7 @@ type TransferType = 'cash_to_bank' | 'bank_to_cash' | 'bank_to_bank';
 export default function ContraVoucher() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { accounts, addVoucher, generateVoucherNumber, createJournalEntry, settings } = useApp();
+  const { accounts, addVoucher, generateVoucherNumber, postTransactionEntry, settings } = useApp();
   const currencySymbol = currencySymbols[settings.currency];
 
   const cashBankAccounts = useMemo(() =>
@@ -63,15 +63,15 @@ export default function ContraVoucher() {
     });
 
     try {
-      createJournalEntry({
-        id: crypto.randomUUID(), date, reference: voucherNumber,
-        referenceType: 'contra' as const, referenceId: voucherId,
+      postTransactionEntry({
+        date, reference: voucherNumber,
+        referenceType: 'contra', referenceId: voucherId,
         description: `Contra: ${fromAccount?.name} → ${toAccount?.name}`,
         lines: [
           { accountId: toAccountId, debit: amount, credit: 0 },
           { accountId: fromAccountId, debit: 0, credit: amount },
         ],
-        createdAt: now,
+        idempotencyKey: `contra:${voucherId}`,
       });
     } catch (err) {
       console.error('[Journal] Entry failed:', err);

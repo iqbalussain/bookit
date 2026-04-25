@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { currencySymbols } from '@/types';
+import { getLedgerBreakdown } from '@/lib/accounting';
 
 export default function ProfitAndLoss() {
   const { journalEntries, accounts, settings } = useApp();
@@ -28,13 +29,13 @@ export default function ProfitAndLoss() {
 
     incomeAccounts.forEach((acc) => {
       let amount = 0;
-      filtered.forEach((e) => e.lines.forEach((l) => { if (l.accountId === acc.id) amount += l.credit - l.debit; }));
+      getLedgerBreakdown(acc.id, filtered).forEach((line) => { amount += line.credit - line.debit; });
       if (amount !== 0) { incomeBreakdown.push({ name: acc.name, amount }); totalIncome += amount; }
     });
 
     expenseAccounts.forEach((acc) => {
       let amount = 0;
-      filtered.forEach((e) => e.lines.forEach((l) => { if (l.accountId === acc.id) amount += l.debit - l.credit; }));
+      getLedgerBreakdown(acc.id, filtered).forEach((line) => { amount += line.debit - line.credit; });
       if (amount !== 0) { expenseBreakdown.push({ name: acc.name, amount }); totalExpenses += amount; }
     });
 

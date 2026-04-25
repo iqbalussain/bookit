@@ -27,7 +27,7 @@ interface ExpenseLine {
 export default function ExpensesVoucher() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { accounts, addAccount, addVoucher, generateVoucherNumber, createJournalEntry, settings } = useApp();
+  const { accounts, addAccount, addVoucher, generateVoucherNumber, postTransactionEntry, settings } = useApp();
   const currencySymbol = currencySymbols[settings.currency];
 
   const expenseAccounts = accounts.filter((a) => a.kind === 'ledger' && a.type === 'expense');
@@ -97,9 +97,6 @@ export default function ExpensesVoucher() {
     if (lines.some((l) => !l.accountId || l.amount <= 0)) { toast({ title: 'Error', description: 'All lines must have an expense head and amount > 0', variant: 'destructive' }); return; }
 
     const journalLines = buildJournalLines();
-    const totalDebit = journalLines.reduce((s, l) => s + l.debit, 0);
-    const totalCredit = journalLines.reduce((s, l) => s + l.credit, 0);
-    if (Math.abs(totalDebit - totalCredit) > 0.01) { toast({ title: 'Error', description: 'Journal entry is not balanced', variant: 'destructive' }); return; }
 
     const now = new Date().toISOString();
     const voucherId = crypto.randomUUID();
@@ -112,12 +109,12 @@ export default function ExpensesVoucher() {
     });
 
     try {
-      createJournalEntry({
-        id: crypto.randomUUID(), date, reference: voucherNumber,
-        referenceType: 'expense' as const, referenceId: voucherId,
+      postTransactionEntry({
+        date, reference: voucherNumber,
+        referenceType: 'expense', referenceId: voucherId,
         description: `Expense: ${payTo}`,
         lines: journalLines,
-        createdAt: now,
+        idempotencyKey: `expense:${voucherId}`,
       });
     } catch (err) {
       console.error('[Journal] Entry failed:', err);

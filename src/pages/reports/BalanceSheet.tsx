@@ -3,17 +3,15 @@ import { useApp } from '@/contexts/AppContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { currencySymbols } from '@/types';
+import { getNetBalanceForAccount } from '@/lib/accounting';
 
 export default function BalanceSheet() {
-  const { journalEntries, accounts, settings } = useApp();
+  const { accountBalances, accounts, settings } = useApp();
   const currencySymbol = currencySymbols[settings.currency];
 
   const { assets, liabilities, equity } = useMemo(() => {
-    const getBalance = (accountId: string) => {
-      let bal = 0;
-      journalEntries.forEach((e) => e.lines.forEach((l) => { if (l.accountId === accountId) bal += l.debit - l.credit; }));
-      return bal;
-    };
+    const accountsById = new Map(accounts.map((account) => [account.id, account]));
+    const getBalance = (accountId: string) => getNetBalanceForAccount(accountId, accountsById, accountBalances);
 
     const assetAccs = accounts.filter((a) => a.type === 'asset').map((a) => ({ ...a, balance: getBalance(a.id) }));
     const liabilityAccs = accounts.filter((a) => a.type === 'liability').map((a) => ({ ...a, balance: -(getBalance(a.id)) }));
@@ -31,7 +29,7 @@ export default function BalanceSheet() {
       liabilities: { items: liabilityAccs, total: liabilityAccs.reduce((s, a) => s + a.balance, 0) },
       equity: { items: equityAccs, total: equityAccs.reduce((s, a) => s + a.balance, 0) + retainedEarnings, retainedEarnings },
     };
-  }, [journalEntries, accounts]);
+  }, [accountBalances, accounts]);
 
   const Section = ({ title, items, total, color }: { title: string; items: { name: string; balance: number }[]; total: number; color: string }) => (
     <Card>
