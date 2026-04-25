@@ -624,6 +624,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           id: q.id,
           number: q.number,
           clientId: q.client_id,
+          salesmanId: q.salesman_id,
           items: [], // Would need to sync line items separately
           netTotal: q.net_total,
           vatAmount: q.vat_amount || 0,
@@ -645,6 +646,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           id: i.id,
           number: i.number,
           clientId: i.client_id,
+          salesmanId: i.salesman_id,
           quotationId: i.quotation_id,
           items: [], // Would need to sync line items separately
           netTotal: i.net_total,

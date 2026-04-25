@@ -18,7 +18,7 @@ import { currencySymbols, type InvoiceStatus } from '@/types';
 import { Plus, Search, Receipt, Trash2, Edit, ChevronDown, Filter } from 'lucide-react';
 
 export default function InvoicesList() {
-  const { invoices, deleteInvoice, getClient, settings, calculateInvoicePaymentStatus } = useApp();
+  const { invoices, deleteInvoice, getClient, getSalesman, settings, calculateInvoicePaymentStatus } = useApp();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<InvoiceStatus | 'all'>('all');
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -142,6 +142,8 @@ export default function InvoicesList() {
                         </div>
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                           <span className="truncate">{client?.name || 'No client'}</span>
+                          <span>•</span>
+                          <span className="truncate">{getSalesman(invoice.salesmanId || '')?.name || 'No salesman'}</span>
                           <span>•</span>
                           <span className="shrink-0">Due {new Date(invoice.dueDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>
                         </div>

@@ -31,7 +31,7 @@ import { currencySymbols, type QuotationStatus } from '@/types';
 import { Plus, Search, FileText, Trash2, Edit, ArrowRight, ChevronDown, ChevronRight, Filter, CheckCircle } from 'lucide-react';
 
 export default function QuotationsList() {
-  const { quotations, deleteQuotation, getClient, settings } = useApp();
+  const { quotations, deleteQuotation, getClient, getSalesman, settings } = useApp();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<QuotationStatus | 'all'>('all');
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -164,6 +164,8 @@ export default function QuotationsList() {
                         </div>
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                           <span className="truncate">{client?.name || 'No client'}</span>
+                          <span>•</span>
+                          <span className="truncate">{getSalesman(quotation.salesmanId || '')?.name || 'No salesman'}</span>
                           <span>•</span>
                           <span className="shrink-0">
                             {new Date(quotation.updatedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}

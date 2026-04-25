@@ -157,7 +157,17 @@ export default function InvoiceForm() {
     const now = new Date().toISOString();
 
     if (isEditing && existingInvoice) {
-      const updated: Invoice = { ...existingInvoice, clientId, items, netTotal: grandTotal, dueDate, notes, terms, updatedAt: now };
+      const updated: Invoice = {
+        ...existingInvoice,
+        clientId,
+        items,
+        netTotal: grandTotal,
+        dueDate,
+        notes,
+        terms,
+        salesmanId,
+        updatedAt: now,
+      };
       updateInvoice(updated);
       toast({ title: 'Invoice updated', description: `${existingInvoice.number} has been updated.` });
     } else {
