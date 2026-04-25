@@ -221,7 +221,8 @@ export default function InvoiceForm() {
     if (!existingInvoice) return;
     const client = getClient(clientId);
     try {
-      await generatePDF({ type: 'invoice', document: existingInvoice, client, settings });
+      await generatePDF({ type: 'invoice', document: existingInvoice, client, settings});
+      toast({ title: 'PDF downloaded successfully' });
     } catch (err) {
       if (err instanceof Error && err.message === 'POPUP_BLOCKED') {
         toast({ title: 'Popups are blocked', description: 'Please allow popups for this site to download the PDF.', variant: 'destructive' });
@@ -277,7 +278,10 @@ export default function InvoiceForm() {
                 <span className="hidden sm:inline ml-1.5">Payment</span>
               </Button>
             )}
-                {/* Download removed per UI update */}
+            <Button variant="outline" size="sm" onClick={handleDownloadPDF} className="h-8 px-2">
+              <Download className="h-4 w-4" />
+              <span className="hidden sm:inline ml-1.5">PDF</span>
+            </Button>
             <Button variant="outline" size="sm" onClick={handleShare} className="h-8 px-2">
               <Share2 className="h-4 w-4" />
               <span className="hidden sm:inline ml-1.5">Share</span>

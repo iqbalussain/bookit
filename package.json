@@ -8,19 +8,14 @@
   "main": "main.js",
   "homepage": "./",
   "scripts": {
-  
-  "dev": "cross-env NODE_ENV=development vite",
-  "build": "cross-env NODE_ENV=production vite build",
-
-  "electron": "electron .",
-  "electron-dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron .\"",
-
-  "start": "electron .",
-
-  "rebuild-electron": "electron-rebuild",
-
-  "dist": "npm run build && npx electron-builder --win nsis --x64 --publish never",
-  "build-win": "npm run build && npm run rebuild-electron && npx electron-builder --win nsis --x64 --publish never"
+    "dev": "cross-env NODE_ENV=development vite",
+    "build": "cross-env NODE_ENV=production vite build",
+    "electron": "electron .",
+    "electron-dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron .\"",
+    "start": "electron .",
+    "rebuild-electron": "electron-rebuild",
+    "dist": "npm run build && npx electron-builder --win nsis --x64 --publish never",
+    "build-win": "npm run build && npm run rebuild-electron && npx electron-builder --win nsis --x64 --publish never"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.11",
@@ -58,6 +53,7 @@
     "electron-updater": "^6.8.3",
     "embla-carousel-react": "^8.6.0",
     "framer-motion": "^12.38.0",
+    "html2pdf.js": "^0.14.0",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.462.0",
     "next-themes": "^0.4.6",

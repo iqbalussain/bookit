@@ -199,6 +199,7 @@ export default function QuotationForm() {
     const client = getClient(clientId);
     try {
       await generatePDF({ type: 'quotation', document: existingQuotation, client, settings });
+      toast({ title: 'PDF downloaded successfully' });
     } catch (err) {
       if (err instanceof Error && err.message === 'POPUP_BLOCKED') {
         toast({ title: 'Popups are blocked', description: 'Please allow popups for this site to download the PDF.', variant: 'destructive' });
