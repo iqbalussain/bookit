@@ -1,7 +1,8 @@
 {
   "name": "bookit",
   "productName": "Bookit",
-  "version": "1.0.0",
+  "version": "2.0.0",
+  "type": "module",
   "description": "Bookit - Modern booking management desktop application built with Electron and React.",
   "author": "Iqbal Ussain",
   "private": true,
