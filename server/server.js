@@ -52,6 +52,11 @@ db.exec(`
     version    INTEGER NOT NULL DEFAULT 1,
     updated_at INTEGER NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS posting_idempotency (
+    idempotency_key TEXT PRIMARY KEY,
+    created_at INTEGER NOT NULL
+  );
 `);
 
 // Whitelist of collections the API will accept.
@@ -108,6 +113,108 @@ const stmtChangedSince = db.prepare(
   `SELECT id, data, version, updated_at, deleted FROM records
    WHERE collection = ? AND updated_at > ?`
 );
+const stmtJournalEntriesByRef = db.prepare(
+  `SELECT id, data, version, updated_at FROM records
+   WHERE collection = 'journalEntries'
+     AND deleted = 0
+     AND json_extract(data, '$.referenceType') = 'sales_invoice'
+     AND json_extract(data, '$.referenceId') = ?`
+);
+const stmtDeleteJournalEntriesByRef = db.prepare(
+  `UPDATE records
+   SET deleted = 1, version = version + 1, updated_at = ?
+   WHERE collection = 'journalEntries'
+     AND deleted = 0
+     AND json_extract(data, '$.referenceType') = 'sales_invoice'
+     AND json_extract(data, '$.referenceId') = ?`
+);
+const stmtIdempotencySeen = db.prepare(
+  `SELECT idempotency_key FROM posting_idempotency WHERE idempotency_key = ?`
+);
+const stmtIdempotencyInsert = db.prepare(
+  `INSERT INTO posting_idempotency (idempotency_key, created_at) VALUES (?, ?)`
+);
+
+function toNumber(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function invoiceVatTotal(invoice) {
+  const items = Array.isArray(invoice?.items) ? invoice.items : [];
+  return items.reduce((sum, item) => sum + toNumber(item?.vatAmount), 0);
+}
+
+function buildSalesInvoicePostingEntry(invoice, version) {
+  const nowIso = new Date().toISOString();
+  const vatTotal = invoiceVatTotal(invoice);
+  const invoiceTotal = toNumber(invoice?.netTotal);
+  const revenue = Math.max(0, invoiceTotal - vatTotal);
+  return {
+    id: `srv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    date: nowIso,
+    reference: invoice.number,
+    referenceType: 'sales_invoice',
+    referenceId: invoice.id,
+    description: `Sales Invoice ${invoice.number}`,
+    lines: [
+      { accountId: 'acc-1100', debit: invoiceTotal, credit: 0 },
+      { accountId: 'acc-4000', debit: 0, credit: revenue },
+      ...(vatTotal > 0 ? [{ accountId: 'acc-2000', debit: 0, credit: vatTotal }] : []),
+    ],
+    createdAt: nowIso,
+    idempotencyKey: `sales_invoice:${invoice.id}:${version}`,
+  };
+}
+
+function buildSalesInvoiceReversalEntry(invoice, previousEntry, version) {
+  const nowIso = new Date().toISOString();
+  return {
+    id: `srv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    date: nowIso,
+    reference: `${invoice.number}-REV`,
+    referenceType: 'sales_invoice',
+    referenceId: invoice.id,
+    description: `Reversal before repost (${invoice.number})`,
+    lines: (previousEntry.lines || []).map((line) => ({
+      accountId: line.accountId,
+      debit: toNumber(line.credit),
+      credit: toNumber(line.debit),
+      ...(line.description ? { description: line.description } : {}),
+    })),
+    createdAt: nowIso,
+    idempotencyKey: `sales_invoice:${invoice.id}:${version}:reversal:${previousEntry.id}`,
+    reversalOf: previousEntry.id,
+  };
+}
+
+const applySalesInvoiceRepost = db.transaction((invoice, version) => {
+  const idempotencyKey = `sales_invoice:${invoice.id}:${version}`;
+  if (stmtIdempotencySeen.get(idempotencyKey)) {
+    return { skipped: true, idempotencyKey };
+  }
+
+  const existingEntries = stmtJournalEntriesByRef
+    .all(invoice.id)
+    .map((row) => JSON.parse(row.data));
+
+  const now = Date.now();
+  if (existingEntries.length > 0) {
+    const reversalEntries = existingEntries.map((entry) =>
+      buildSalesInvoiceReversalEntry(invoice, entry, version)
+    );
+
+    stmtDeleteJournalEntriesByRef.run(now, invoice.id);
+    for (const reversal of reversalEntries) {
+      stmtUpsertForce.run('journalEntries', reversal.id, JSON.stringify(reversal), now);
+    }
+  }
+
+  const freshPosting = buildSalesInvoicePostingEntry(invoice, version);
+  stmtUpsertForce.run('journalEntries', freshPosting.id, JSON.stringify(freshPosting), now);
+  stmtIdempotencyInsert.run(idempotencyKey, now);
+  return { skipped: false, idempotencyKey };
+});
 
 function checkCollection(req, res) {
   if (!COLLECTIONS.has(req.params.collection)) {
@@ -146,6 +253,10 @@ app.post('/api/records/:collection', (req, res) => {
   const now = Date.now();
   try {
     stmtUpsertForce.run(req.params.collection, obj.id, JSON.stringify(obj), now);
+    if (req.params.collection === 'invoices') {
+      const version = Number(obj._version) || 1;
+      applySalesInvoiceRepost(obj, version);
+    }
     const row = stmtGet.get(req.params.collection, obj.id);
     res.json({ ...obj, _version: row.version, _updatedAt: row.updated_at });
   } catch (e) {
@@ -178,6 +289,10 @@ app.put('/api/records/:collection/:id', (req, res) => {
       error: 'Version conflict',
       latest: { ...JSON.parse(row.data), _version: row.version, _updatedAt: row.updated_at },
     });
+  }
+  if (collection === 'invoices') {
+    const version = existing.version + 1;
+    applySalesInvoiceRepost(obj, version);
   }
   const row = stmtGet.get(collection, id);
   res.json({ ...obj, _version: row.version, _updatedAt: row.updated_at });
