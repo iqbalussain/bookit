@@ -30,8 +30,8 @@ export default function ExpensesVoucher() {
   const { accounts, addAccount, addVoucher, generateVoucherNumber, createJournalEntry, settings } = useApp();
   const currencySymbol = currencySymbols[settings.currency];
 
-  const expenseAccounts = accounts.filter((a) => a.type === 'expense');
-  const bankAccounts = accounts.filter((a) => a.id === 'acc-1000' || a.id === 'acc-1010' || (a.type === 'asset' && (a.name.toLowerCase().includes('bank') || a.name.toLowerCase().includes('cash'))));
+  const expenseAccounts = accounts.filter((a) => a.kind === 'ledger' && a.type === 'expense');
+  const bankAccounts = accounts.filter((a) => a.kind === 'ledger' && (a.id === 'acc-1000' || a.id === 'acc-1010' || (a.type === 'asset' && (a.name.toLowerCase().includes('bank') || a.name.toLowerCase().includes('cash')))));
 
   const [voucherNumber] = useState(() => generateVoucherNumber('expense'));
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -63,7 +63,15 @@ export default function ExpensesVoucher() {
 
   const handleAddAccount = () => {
     if (!newAccountName || !newAccountCode) return;
-    const account = { id: `acc-${crypto.randomUUID().slice(0, 8)}`, code: newAccountCode, name: newAccountName, type: 'expense' as const, isSystem: false };
+    const account = {
+      id: `acc-${crypto.randomUUID().slice(0, 8)}`,
+      code: newAccountCode,
+      name: newAccountName,
+      type: 'expense' as const,
+      kind: 'ledger' as const,
+      parentId: 'grp-expense-root',
+      isSystem: false,
+    };
     addAccount(account);
     setShowNewAccount(false);
     setNewAccountName('');

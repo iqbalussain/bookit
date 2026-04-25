@@ -23,7 +23,7 @@ export default function ContraVoucher() {
   const currencySymbol = currencySymbols[settings.currency];
 
   const cashBankAccounts = useMemo(() =>
-    accounts.filter((a) => a.id === 'acc-1000' || a.id === 'acc-1010' || (a.type === 'asset' && (a.name.toLowerCase().includes('bank') || a.name.toLowerCase().includes('cash')))),
+    accounts.filter((a) => a.kind === 'ledger' && (a.id === 'acc-1000' || a.id === 'acc-1010' || (a.type === 'asset' && (a.name.toLowerCase().includes('bank') || a.name.toLowerCase().includes('cash'))))),
     [accounts]
   );
 
