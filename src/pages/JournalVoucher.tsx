@@ -22,6 +22,7 @@ export default function JournalVoucher() {
   const { toast } = useToast();
   const { accounts, addJournalVoucher, generateVoucherNumber, settings } = useApp();
   const currencySymbol = currencySymbols[settings.currency];
+  const ledgerAccounts = useMemo(() => accounts.filter((account) => account.kind === 'ledger'), [accounts]);
 
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [narration, setNarration] = useState('');
@@ -130,7 +131,7 @@ export default function JournalVoucher() {
                       <Select value={row.accountId} onValueChange={(v) => updateRow(row.id, { accountId: v })}>
                         <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Account" /></SelectTrigger>
                         <SelectContent>
-                          {accounts.map((a) => (
+                          {ledgerAccounts.map((a) => (
                             <SelectItem key={a.id} value={a.id}>{a.code} — {a.name}</SelectItem>
                           ))}
                         </SelectContent>

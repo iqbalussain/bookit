@@ -1,4 +1,4 @@
-import React, { createContext, useContext, ReactNode } from 'react';
+import React, { createContext, useContext, ReactNode, useEffect } from 'react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useRemoteCollection } from '@/hooks/useRemoteCollection';
 import type { Client, Quotation, Invoice, PurchaseInvoice, BusinessSettings, Payment, Account, JournalEntry, JournalLine, Company, Voucher, VoucherType, AuditEntry, Item, InvoiceStatus } from '@/types';
@@ -139,6 +139,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [salesmen, setSalesmen] = useRemoteCollection<Salesman>('salesmen', companyKey('salesmen'), []);
   const [settings, setSettings] = useLocalStorage<BusinessSettings>(companyKey('settings'), defaultSettings);
   const [auditLog, setAuditLog] = useLocalStorage<AuditEntry[]>(companyKey('audit_log'), []);
+
+  const normalizeAccounts = (input: Account[]): Account[] => {
+    const hasKindField = input.every((account) => account.kind === 'group' || account.kind === 'ledger');
+    const hasConsistentParent = input.every((account) => Object.prototype.hasOwnProperty.call(account, 'parentId'));
+    if (hasKindField && hasConsistentParent) {
+      return input;
+    }
+
+    const migrated = input.map((account) => {
+      const defaultAccount = DEFAULT_ACCOUNTS.find((candidate) => candidate.id === account.id);
+      const fallbackKind = defaultAccount?.kind ?? 'ledger';
+      const fallbackParentId = defaultAccount?.parentId ?? null;
+      return {
+        ...account,
+        kind: account.kind ?? fallbackKind,
+        parentId: account.parentId ?? fallbackParentId,
+      };
+    });
+
+    const existingIds = new Set(migrated.map((account) => account.id));
+    const missingSystemAccounts = DEFAULT_ACCOUNTS.filter((account) => !existingIds.has(account.id));
+    return [...migrated, ...missingSystemAccounts];
+  };
+
+  useEffect(() => {
+    const migratedAccounts = normalizeAccounts(accounts);
+    if (migratedAccounts.length !== accounts.length || migratedAccounts.some((account, index) => account !== accounts[index])) {
+      setAccounts(migratedAccounts);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accounts, setAccounts]);
 
   const addAuditEntry = (entry: Omit<AuditEntry, 'id' | 'createdAt'>) => {
     const auditEntry: AuditEntry = {
@@ -328,6 +359,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Account operations
   const addAccount = (account: Account) => {
+    if (!account.kind) {
+      throw new Error('Account kind is required.');
+    }
+    if (account.parentId) {
+      const parent = accounts.find((candidate) => candidate.id === account.parentId);
+      if (!parent) {
+        throw new Error('Selected parent group does not exist.');
+      }
+      if (parent.kind !== 'group') {
+        throw new Error('Accounts can only be created under group nodes.');
+      }
+      if (parent.type !== account.type) {
+        throw new Error('Parent group type must match account type.');
+      }
+    }
+    if (account.parentId === account.id) {
+      throw new Error('An account cannot be its own parent.');
+    }
+    const parentLookup = new Map(accounts.map((candidate) => [candidate.id, candidate.parentId]));
+    parentLookup.set(account.id, account.parentId);
+    const seen = new Set<string>([account.id]);
+    let cursor = account.parentId;
+    while (cursor) {
+      if (seen.has(cursor)) {
+        throw new Error('Account hierarchy cycle detected.');
+      }
+      seen.add(cursor);
+      cursor = parentLookup.get(cursor) ?? null;
+    }
+
     setAccounts((prev) => [...prev, account]);
     addAuditEntry({
       type: 'account',
@@ -336,7 +397,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
       details: 'Chart of accounts item added',
     });
   };
-  const deleteAccount = (id: string) => setAccounts((prev) => prev.filter((a) => a.id !== id || a.isSystem));
+  const deleteAccount = (id: string) => {
+    setAccounts((prev) => {
+      const target = prev.find((account) => account.id === id);
+      if (!target || target.isSystem) {
+        return prev;
+      }
+
+      const hasChildren = prev.some((account) => account.parentId === id);
+      if (hasChildren) {
+        throw new Error('Cannot delete a group account that still has child accounts.');
+      }
+
+      return prev.filter((account) => account.id !== id);
+    });
+  };
 
   // Journal operations
   const createJournalEntry = (entry: JournalEntry) => {
