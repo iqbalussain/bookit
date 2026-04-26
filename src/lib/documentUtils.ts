@@ -86,12 +86,6 @@ export async function shareViaWhatsApp({ type, document: docData, client, settin
   const currencySymbol = currencySymbols[settings.currency];
   const isInvoice = type === 'invoice';
 
-  try {
-    await generatePDF({ type, document: docData, client, settings });
-  } catch (err) {
-    console.error('PDF error:', err);
-  }
-
   const netTotal = docData.netTotal;
 
   const message = encodeURIComponent(
@@ -106,18 +100,23 @@ export async function shareViaWhatsApp({ type, document: docData, client, settin
     : `https://wa.me/?text=${message}`;
 
   window.open(url, '_blank');
+
+  // Run PDF generation in the background so share stays user-gesture initiated
+  void generatePDF({ type, document: docData, client, settings }).catch((err) => {
+    console.error('PDF error:', err);
+  });
 }
 // Helper function to generate PDF as blob
-export async function generatePDFBlob({ type, document, client, settings }: DocumentData) {
+export async function generatePDFBlob({ type, document: docData, client, settings }: DocumentData) {
   const currencySymbol = currencySymbols[settings.currency];
   const isInvoice = type === 'invoice';
-  const invoice = isInvoice ? (document as Invoice) : null;
+  const invoice = isInvoice ? (docData as Invoice) : null;
 
   const html = `
     <!DOCTYPE html>
     <html>
     <head>
-      <title>${document.number}</title>
+      <title>${docData.number}</title>
       <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
@@ -269,8 +268,8 @@ export async function generatePDFBlob({ type, document, client, settings }: Docu
         </div>
         <div class="doc-info">
           <div class="doc-type">${type}</div>
-          <div class="doc-number">${document.number}</div>
-          <div class="doc-date">Date: ${new Date(document.createdAt).toLocaleDateString('en-IN')}</div>
+          <div class="doc-number">${docData.number}</div>
+          <div class="doc-date">Date: ${new Date(docData.createdAt).toLocaleDateString('en-IN')}</div>
           ${isInvoice && invoice ? `<div class="doc-date">Due: ${new Date(invoice.dueDate).toLocaleDateString('en-IN')}</div>` : ''}
         </div>
       </div>
@@ -296,7 +295,7 @@ export async function generatePDFBlob({ type, document, client, settings }: Docu
           </tr>
         </thead>
         <tbody>
-          ${document.items.map((item, index) => `
+          ${docData.items.map((item, index) => `
             <tr>
               <td>${index + 1}</td>
               <td>
@@ -315,25 +314,25 @@ export async function generatePDFBlob({ type, document, client, settings }: Docu
         <div class="totals-box">
           <div class="total-row">
             <span>Subtotal</span>
-            <span>${currencySymbol}${document.items.reduce((s, i) => s + i.total, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+            <span>${currencySymbol}${docData.items.reduce((s, i) => s + i.total, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
           </div>
           <div class="total-row">
             <span>VAT</span>
-            <span>${currencySymbol}${document.items.reduce((s, i) => s + (i.vatApplicable ? (i.vatAmount ?? 0) : 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+            <span>${currencySymbol}${docData.items.reduce((s, i) => s + (i.vatApplicable ? (i.vatAmount ?? 0) : 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
           </div>
           <div class="total-row">
             <span>Total After VAT</span>
-            <span>${currencySymbol}${document.netTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+            <span>${currencySymbol}${docData.netTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
           </div>
           <div class="total-row grand">
             <span>Grand Total</span>
-            <span>${currencySymbol}${document.netTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+            <span>${currencySymbol}${docData.netTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
           </div>
         </div>
       </div>
       
       <div class="amount-in-words">
-        <p><strong>Amount in Words:</strong> ${numberToWords(document.netTotal, settings.currency)}</p>
+        <p><strong>Amount in Words:</strong> ${numberToWords(docData.netTotal, settings.currency)}</p>
       </div>
       
       ${(settings.bankName || settings.bankAccountNumber) ? `
@@ -346,17 +345,17 @@ export async function generatePDFBlob({ type, document, client, settings }: Docu
         </div>
       ` : ''}
 
-      ${document.notes ? `
+      ${docData.notes ? `
         <div class="notes-section">
           <h4>Notes</h4>
-          <p>${document.notes}</p>
+          <p>${docData.notes}</p>
         </div>
       ` : ''}
       
-      ${document.terms ? `
+      ${docData.terms ? `
         <div class="notes-section">
           <h4>Terms & Conditions</h4>
-          <p>${document.terms}</p>
+          <p>${docData.terms}</p>
         </div>
       ` : ''}
       
@@ -380,7 +379,7 @@ export async function generatePDFBlob({ type, document, client, settings }: Docu
     const worker = html2pdf()
       .set({
         margin: [10, 10, 10, 10],
-        filename: `${type}-${document.number}.pdf`,
+        filename: `${type}-${docData.number}.pdf`,
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: { scale: 2, useCORS: true },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
