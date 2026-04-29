@@ -40,6 +40,7 @@ const ProfitAndLoss = lazy(() => import("./pages/reports/ProfitAndLoss"));
 const BalanceSheet = lazy(() => import("./pages/reports/BalanceSheet"));
 const TrialBalance = lazy(() => import("./pages/reports/TrialBalance"));
 const AgingReport = lazy(() => import("./pages/reports/AgingReport"));
+const DayBook = lazy(() => import("./pages/DayBook"));
 
 const queryClient = new QueryClient();
 
@@ -120,6 +121,7 @@ const App = () => (
                     <Route path="/reports/aging" element={<ErrorBoundary inline><AgingReport /></ErrorBoundary>} />
                     <Route path="/reports/items" element={<ErrorBoundary inline><ItemReport /></ErrorBoundary>} />
                     <Route path="/reports/vat" element={<ErrorBoundary inline><VatReturn /></ErrorBoundary>} />
+                    <Route path="/day-book" element={<ErrorBoundary inline><DayBook /></ErrorBoundary>} />
                     <Route path="/settings" element={<ErrorBoundary inline><Settings /></ErrorBoundary>} />
                     <Route path="*" element={<NotFound />} />
                   </Routes>

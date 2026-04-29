@@ -15,6 +15,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { currencySymbols, type PaymentMethod } from '@/types';
 import { ArrowLeft, Save, Plus, Trash2, RefreshCw } from 'lucide-react';
+import { safeRandomUUID } from '@/lib/uuid';
 
 interface ExpenseLine {
   id: string;
@@ -39,7 +40,7 @@ export default function ExpensesVoucher() {
   const [reference, setReference] = useState('');
   const [narration, setNarration] = useState('');
   const [lines, setLines] = useState<ExpenseLine[]>([
-    { id: crypto.randomUUID(), accountId: '', amount: 0, method: 'cash' },
+    { id: safeRandomUUID(), accountId: '', amount: 0, method: 'cash' },
   ]);
 
   // New account dialog
@@ -54,7 +55,7 @@ export default function ExpensesVoucher() {
   };
 
   const addLine = () => {
-    setLines((prev) => [...prev, { id: crypto.randomUUID(), accountId: '', amount: 0, method: 'cash' }]);
+    setLines((prev) => [...prev, { id: safeRandomUUID(), accountId: '', amount: 0, method: 'cash' }]);
   };
 
   const removeLine = (id: string) => {
@@ -64,7 +65,7 @@ export default function ExpensesVoucher() {
   const handleAddAccount = () => {
     if (!newAccountName || !newAccountCode) return;
     const account = {
-      id: `acc-${crypto.randomUUID().slice(0, 8)}`,
+      id: `acc-${safeRandomUUID().slice(0, 8)}`,
       code: newAccountCode,
       name: newAccountName,
       type: 'expense' as const,
@@ -99,7 +100,7 @@ export default function ExpensesVoucher() {
     const journalLines = buildJournalLines();
 
     const now = new Date().toISOString();
-    const voucherId = crypto.randomUUID();
+    const voucherId = safeRandomUUID();
 
     addVoucher({
       id: voucherId, number: voucherNumber, type: 'expense', date, partyName: payTo,
@@ -125,7 +126,7 @@ export default function ExpensesVoucher() {
 
     if (andNew) {
       setPayTo(''); setReference(''); setNarration('');
-      setLines([{ id: crypto.randomUUID(), accountId: '', amount: 0, method: 'cash' }]);
+      setLines([{ id: safeRandomUUID(), accountId: '', amount: 0, method: 'cash' }]);
     } else {
       navigate('/vouchers');
     }

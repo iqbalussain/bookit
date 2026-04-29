@@ -12,6 +12,7 @@ import {
 } from '@/lib/accounting';
 import type { Salesman } from '@/types';
 import { DEFAULT_ACCOUNTS } from '@/types';
+import { safeRandomUUID } from '@/lib/uuid';
 
 interface AppContextType {
   // Clients
@@ -472,7 +473,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     idempotencyKey?: string;
   }): JournalEntry => {
     const entry: JournalEntry = {
-      id: crypto.randomUUID(),
+      id: safeRandomUUID(),
       date: input.date,
       reference: input.reference,
       referenceType: input.referenceType,

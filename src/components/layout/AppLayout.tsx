@@ -32,6 +32,7 @@ const navItems = [
   { name: 'Vouchers', href: '/vouchers', icon: Wallet },
   { name: 'Parties', href: '/clients', icon: Users },
   { name: 'Accounts', href: '/accounts', icon: BookOpen },
+  { name: 'Day Book', href: '/day-book', icon: BookOpen },
   { name: 'Settings', href: '/settings', icon: Settings },
 ];
 
