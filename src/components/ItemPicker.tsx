@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import type { Item } from '@/types';
+import { safeRandomUUID } from '@/lib/uuid';
 
 interface Props {
   value?: string; // itemId
@@ -45,7 +46,7 @@ export function ItemPicker({ value, fallbackName, onSelect, className }: Props) 
       return;
     }
     const newItem: Item = {
-      id: crypto.randomUUID(),
+      id: safeRandomUUID(),
       name: draft.name.trim(),
       unit: draft.unit,
       rate: draft.rate,

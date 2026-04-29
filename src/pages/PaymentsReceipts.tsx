@@ -13,6 +13,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { currencySymbols, type Payment, type PaymentMethod } from '@/types';
 import { ArrowDownLeft, ArrowUpRight, Save, CreditCard, Banknote, Building2, Globe } from 'lucide-react';
+import { safeRandomUUID } from '@/lib/uuid';
 
 export default function PaymentsReceipts() {
   const { toast } = useToast();
@@ -78,7 +79,7 @@ export default function PaymentsReceipts() {
 
     const now = new Date().toISOString();
     const payment: Payment = {
-      id: crypto.randomUUID(), invoiceId: selectedInvoiceId,
+      id: safeRandomUUID(), invoiceId: selectedInvoiceId,
       invoiceType: mode === 'receipt' ? 'sales' : 'purchase',
       amount, date, method, reference, notes, createdAt: now,
     };
