@@ -158,7 +158,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [payments, setPayments] = useRemoteCollection<Payment>('payments', companyKey('payments'), []);
   const [accounts, setAccounts] = useRemoteCollection<Account>('accounts', companyKey('accounts'), DEFAULT_ACCOUNTS);
   const [journalEntries, setJournalEntries] = useRemoteCollection<JournalEntry>('journalEntries', companyKey('journal_entries'), []);
-  const [accountBalances, setAccountBalances] = useRemoteCollection<AccountBalanceStore>('accountBalances', companyKey('account_balances'), {});
+  const [accountBalances, setAccountBalances] = useLocalStorage<AccountBalanceStore>(companyKey('account_balances'), {});
   const [vouchers, setVouchers] = useRemoteCollection<Voucher>('vouchers', companyKey('vouchers'), []);
   const [items, setItems] = useRemoteCollection<Item>('items', companyKey('items'), []);
   const [salesmen, setSalesmen] = useRemoteCollection<Salesman>('salesmen', companyKey('salesmen'), []);
