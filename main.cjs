@@ -1,72 +1,57 @@
 const path = require('path');
 const fs = require('fs');
 const { app, BrowserWindow, dialog, shell, ipcMain } = require('electron');
-const { autoUpdater } = require('electron-updater');
 const sqlite3 = require('sqlite3').verbose();
-const DiagnosticLogger = require('./diagnostic-logger.cjs');
 
-const isDev = process.env.NODE_ENV === 'development';
-const diagnostics = new DiagnosticLogger();
 let mainWindow = null;
 let db = null;
 
 // ================= DATABASE =================
 function initDatabase() {
-  const dbPath = path.join(app.getPath('userData'), 'bookit.db');
-  diagnostics.log('info', `DB Path: ${dbPath}`);
-
+  const dbPath = path.join(app.getPath('userData'), 'Bit2book.db');
   db = new sqlite3.Database(dbPath);
 
   db.serialize(() => {
-    // Parties
+
+    // PARTIES
     db.run(`CREATE TABLE IF NOT EXISTS parties (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT,
       phone TEXT,
       type TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME,
-      sync_status INTEGER DEFAULT 0
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
 
-    // Invoices
+    // QUOTATIONS
+    db.run(`CREATE TABLE IF NOT EXISTS quotations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      number TEXT,
+      client_id INTEGER,
+      salesman_id INTEGER,
+      status TEXT,
+      net_total REAL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME
+    )`);
+
+    // INVOICES
     db.run(`CREATE TABLE IF NOT EXISTS invoices (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       party_id INTEGER,
       invoice_no TEXT,
       total REAL,
-      paid REAL DEFAULT 0,
       status TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME,
-      sync_status INTEGER DEFAULT 0
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
 
-    // Invoice Items
-    db.run(`CREATE TABLE IF NOT EXISTS invoice_items (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      invoice_id INTEGER,
-      item_name TEXT,
-      qty REAL,
-      price REAL,
-      total REAL
-    )`);
-
-    // Payments
+    // PAYMENTS
     db.run(`CREATE TABLE IF NOT EXISTS payments (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       party_id INTEGER,
       amount REAL,
       method TEXT,
       reference TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      sync_status INTEGER DEFAULT 0
-    )`);
-
-    // Settings
-    db.run(`CREATE TABLE IF NOT EXISTS settings (
-      key TEXT PRIMARY KEY,
-      value TEXT
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
   });
 }
@@ -74,61 +59,61 @@ function initDatabase() {
 // ================= IPC =================
 function setupIPC() {
 
-
   // PARTIES
   ipcMain.handle('get-parties', () => {
     return new Promise((resolve, reject) => {
-      db.all(`SELECT * FROM parties ORDER BY created_at DESC`, [], (err, rows) => {
+      db.all(`SELECT * FROM parties`, [], (err, rows) => {
         if (err) reject(err);
         else resolve(rows);
       });
     });
   });
 
-  // QUOTATIONS (placeholder until dedicated table migration)
-  ipcMain.handle('save-quotation', (_, quotation) => Promise.resolve({ id: quotation?.id ?? null }));
-  ipcMain.handle('get-quotations', () => Promise.resolve([]));
-
-  // PURCHASE INVOICES (placeholder until dedicated table migration)
-  ipcMain.handle('save-purchase-invoice', (_, purchaseInvoice) => Promise.resolve({ id: purchaseInvoice?.id ?? null }));
-  ipcMain.handle('get-purchase-invoices', () => Promise.resolve([]));
-
-  // PAYMENTS LIST
-  ipcMain.handle('get-payments', () => {
+  // ================= QUOTATIONS =================
+  ipcMain.handle('get-quotations', () => {
     return new Promise((resolve, reject) => {
-      db.all(`SELECT * FROM payments ORDER BY created_at DESC`, [], (err, rows) => {
+      db.all(`SELECT * FROM quotations ORDER BY created_at DESC`, [], (err, rows) => {
         if (err) reject(err);
-        else resolve(rows);
+        else {
+          const mapped = rows.map(r => ({
+            id: r.id,
+            number: r.number,
+            clientId: r.client_id,
+            salesmanId: r.salesman_id,
+            status: r.status,
+            netTotal: r.net_total,
+            updatedAt: r.updated_at || r.created_at
+          }));
+          resolve(mapped);
+        }
       });
     });
   });
 
-  // ACCOUNTS / SETTINGS placeholders for renderer compatibility
-  ipcMain.handle('get-accounts', () => Promise.resolve([]));
-  ipcMain.handle('save-account', () => Promise.resolve(true));
-  ipcMain.handle('get-business-settings', () => Promise.resolve({}));
-  ipcMain.handle('save-business-settings', () => Promise.resolve(true));
-
-  // DIALOGS
-  ipcMain.handle('show-save-dialog', async (_, options) => dialog.showSaveDialog(mainWindow, options));
-  ipcMain.handle('show-open-dialog', async (_, options) => dialog.showOpenDialog(mainWindow, options));
-
-  // DB PATH
-  ipcMain.handle('get-db-path', () => {
-    return path.join(app.getPath('userData'), 'bookit.db');
-  });
-
-  // GENERIC QUERY
-  ipcMain.handle('db-query', (_, sql, params = []) => {
+  ipcMain.handle('save-quotation', (_, q) => {
     return new Promise((resolve, reject) => {
-      db.all(sql, params, (err, rows) => {
+      db.run(
+        `INSERT INTO quotations (number, client_id, salesman_id, status, net_total, updated_at)
+         VALUES (?, ?, ?, ?, ?, datetime('now'))`,
+        [q.number, q.clientId, q.salesmanId, q.status, q.netTotal],
+        function (err) {
+          if (err) reject(err);
+          else resolve({ id: this.lastID });
+        }
+      );
+    });
+  });
+
+  // ================= INVOICES =================
+  ipcMain.handle('get-invoices', () => {
+    return new Promise((resolve, reject) => {
+      db.all(`SELECT * FROM invoices`, [], (err, rows) => {
         if (err) reject(err);
         else resolve(rows);
       });
     });
   });
 
-  // SAVE INVOICE
   ipcMain.handle('save-invoice', (_, invoice) => {
     return new Promise((resolve, reject) => {
       db.run(
@@ -143,17 +128,16 @@ function setupIPC() {
     });
   });
 
-  // GET INVOICES
-  ipcMain.handle('get-invoices', () => {
+  // ================= PAYMENTS =================
+  ipcMain.handle('get-payments', () => {
     return new Promise((resolve, reject) => {
-      db.all(`SELECT * FROM invoices`, [], (err, rows) => {
+      db.all(`SELECT * FROM payments`, [], (err, rows) => {
         if (err) reject(err);
         else resolve(rows);
       });
     });
   });
 
-  // SAVE PAYMENT
   ipcMain.handle('save-payment', (_, payment) => {
     return new Promise((resolve, reject) => {
       db.run(
@@ -168,77 +152,88 @@ function setupIPC() {
     });
   });
 
-
-  // RENDERER ERROR LOGS
-  ipcMain.handle('renderer-error-log', (_, payload = {}) => {
-    try {
-      const { message = 'Unknown renderer error', stack = '', componentStack = '', context = '' } = payload || {};
-      diagnostics.log('error', `[renderer] ${message}${context ? ` | context: ${context}` : ''}`);
-      if (stack) diagnostics.log('error', `[renderer stack] ${stack}`);
-      if (componentStack) diagnostics.log('error', `[react component stack] ${componentStack}`);
-      return true;
-    } catch (error) {
-      diagnostics.log('error', `Failed to write renderer error log: ${error?.message || error}`);
-      return false;
-    }
+  // ================= SETTINGS =================
+  ipcMain.handle('get-business-settings', () => Promise.resolve({ currency: 'INR' }));
+  ipcMain.handle('save-business-settings', () => Promise.resolve(true));
+  ipcMain.handle('get-db-path', () => {
+  return path.join(app.getPath('userData'), 'Bit2book.db');
+  });
+    // Get DB Path
+  ipcMain.handle('get-db-path', () => {
+    return path.join(app.getPath('userData'), 'bookit.db');
   });
 
-  // BACKUP
-  ipcMain.handle('backup-db', (_, dest) => {
+  // Open DB Folder
+  ipcMain.handle('open-db-folder', () => {
     const dbPath = path.join(app.getPath('userData'), 'bookit.db');
-    fs.copyFileSync(dbPath, dest);
+    shell.showItemInFolder(dbPath);
     return true;
   });
 
-  // RESTORE
-  ipcMain.handle('restore-db', (_, src) => {
+  // Backup Database
+  ipcMain.handle('backup-db', async () => {
     const dbPath = path.join(app.getPath('userData'), 'bookit.db');
-    fs.copyFileSync(src, dbPath);
+
+    const result = await dialog.showSaveDialog(mainWindow, {
+      title: 'Backup Database',
+      defaultPath: 'bookit-backup.db',
+      filters: [{ name: 'Database', extensions: ['db'] }]
+    });
+
+    if (result.canceled) return false;
+
+    fs.copyFileSync(dbPath, result.filePath);
     return true;
   });
-}
+
+  // Restore Database
+  ipcMain.handle('restore-db', async () => {
+    const dbPath = path.join(app.getPath('userData'), 'bookit.db');
+
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Restore Database',
+      filters: [{ name: 'Database', extensions: ['db'] }],
+      properties: ['openFile']
+    });
+
+    if (result.canceled) return false;
+
+    fs.copyFileSync(result.filePaths[0], dbPath);
+    return true;
+  });
+
+    // ================= DIALOG =================
+    ipcMain.handle('show-save-dialog', (_, options) => dialog.showSaveDialog(mainWindow, options));
+    ipcMain.handle('show-open-dialog', (_, options) => dialog.showOpenDialog(mainWindow, options));
+    ipcMain.handle('get-db-path',()=> {
+      return path.join(app.getPath('userData'),'Bit2book.db')
+    });
+  }
 
 // ================= WINDOW =================
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
-    show: false,
-    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
     },
   });
 
-  mainWindow.once('ready-to-show', () => mainWindow.show());
+  // 🔥 IMPORTANT FOR DEBUG
+  mainWindow.webContents.openDevTools();
 
-  if (isDev) {
+  if (process.env.NODE_ENV === 'development') {
     mainWindow.loadURL('http://localhost:5173');
   } else {
     mainWindow.loadFile(path.join(__dirname, 'dist/index.html'));
   }
-
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('http')) {
-      shell.openExternal(url);
-      return { action: 'deny' };
-    }
-    return { action: 'allow' };
-  });
 }
 
 // ================= APP =================
-function initializeApp() {
-  app.whenReady().then(() => {
-    initDatabase();
-    setupIPC();
-    createWindow();
-  });
-
-  app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') app.quit();
-  });
-}
-
-initializeApp();
+app.whenReady().then(() => {
+  initDatabase();
+  setupIPC();
+  createWindow();
+});

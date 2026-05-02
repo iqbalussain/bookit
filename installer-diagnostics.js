@@ -1,7 +1,3 @@
-/**
- * Installer Diagnostics for BookIt
- * Logs Squirrel/Windows installer events
- */
 
 const fs = require('fs');
 const path = require('path');
@@ -15,7 +11,7 @@ class InstallerDiagnostics {
   }
 
   getInstallerLogsDirectory() {
-    return path.join(os.homedir(), 'AppData', 'Local', 'bookit', 'installer-logs');
+    return path.join(os.homedir(), 'AppData', 'Local', 'Bit2book', 'installer-logs');
   }
 
   ensureDirectory(dirPath) {
@@ -53,7 +49,7 @@ class InstallerDiagnostics {
   logInstall() {
     this.log('=== INSTALLATION ===');
     this.log(`Install Path: ${process.execPath}`);
-    this.log(`User Data Path: ${path.join(os.homedir(), 'AppData', 'Local', 'bookit')}`);
+    this.log(`User Data Path: ${path.join(os.homedir(), 'AppData', 'Local', 'Bit2book')}`);
     this.log('Creating shortcuts and registry entries');
     this.logSystemInfo();
   }

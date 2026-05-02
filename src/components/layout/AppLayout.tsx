@@ -90,7 +90,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               <Receipt className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">BookIt OS</p>
+              <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">Bit2book OS</p>
               <p className="text-lg font-semibold tracking-tight">Business HQ</p>
             </div>
           </Link>

@@ -62,8 +62,8 @@ function StorageErrorListener() {
       });
     };
 
-    window.addEventListener("bookit:storage-error", handler);
-    return () => window.removeEventListener("bookit:storage-error", handler);
+    window.addEventListener("Bit2book:storage-error", handler);
+    return () => window.removeEventListener("Bit2book:storage-error", handler);
   }, []);
 
   useEffect(() => {
