@@ -1,47 +1,61 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+const invoke = (channel, ...args) => ipcRenderer.invoke(channel, ...args);
+
 contextBridge.exposeInMainWorld('electronAPI', {
-  // Database operations
-  query: (sql, params) => ipcRenderer.invoke('db-query', sql, params),
+  query: (sql, params) => invoke('db-query', sql, params),
 
-  // Parties
-  getParties: () => ipcRenderer.invoke('get-parties'),
+  getParties: () => invoke('get-parties'),
 
-  // Invoices
-  saveInvoice: (invoice) => ipcRenderer.invoke('save-invoice', invoice),
-  getInvoices: () => ipcRenderer.invoke('get-invoices'),
+  saveInvoice: (invoice) => invoke('save-invoice', invoice),
+  getInvoices: () => invoke('get-invoices'),
 
-  // Quotations
-  saveQuotation: (quotation) => ipcRenderer.invoke('save-quotation', quotation),
-  getQuotations: () => ipcRenderer.invoke('get-quotations'),
+  saveQuotation: (quotation) => invoke('save-quotation', quotation),
+  getQuotations: () => invoke('get-quotations'),
 
-  // Purchase Invoices
-  savePurchaseInvoice: (purchaseInvoice) => ipcRenderer.invoke('save-purchase-invoice', purchaseInvoice),
-  getPurchaseInvoices: () => ipcRenderer.invoke('get-purchase-invoices'),
+  savePurchaseInvoice: (purchaseInvoice) => invoke('save-purchase-invoice', purchaseInvoice),
+  getPurchaseInvoices: () => invoke('get-purchase-invoices'),
 
-  // Payments
-  savePayment: (payment) => ipcRenderer.invoke('save-payment', payment),
-  getPayments: () => ipcRenderer.invoke('get-payments'),
+  savePayment: (payment) => invoke('save-payment', payment),
+  getPayments: () => invoke('get-payments'),
 
-  // Accounts
-  getAccounts: () => ipcRenderer.invoke('get-accounts'),
-  saveAccount: (account) => ipcRenderer.invoke('save-account', account),
+  getAccounts: () => invoke('get-accounts'),
+  saveAccount: (account) => invoke('save-account', account),
 
-  // Business Settings
-  getBusinessSettings: () => ipcRenderer.invoke('get-business-settings'),
-  saveBusinessSettings: (settings) => ipcRenderer.invoke('save-business-settings', settings),
+  getBusinessSettings: () => invoke('get-business-settings'),
+  saveBusinessSettings: (settings) => invoke('save-business-settings', settings),
 
-  // Dialogs
-  showSaveDialog: (options) => ipcRenderer.invoke('show-save-dialog', options),
-  showOpenDialog: (options) => ipcRenderer.invoke('show-open-dialog', options),
+  showSaveDialog: (options) => invoke('show-save-dialog', options),
+  showOpenDialog: (options) => invoke('show-open-dialog', options),
 
-  // Database info
-  getDbPath: () => ipcRenderer.invoke('get-db-path'),
+  getDbPath: () => invoke('get-db-path'),
+  backup: (destinationPath) => invoke('backup-db', destinationPath),
+  restore: (backupPath) => invoke('restore-db', backupPath),
+  openDbFolder: () => invoke('open-db-folder'),
 
-  // Backup/Restore
-  backup: (destinationPath) => ipcRenderer.invoke('backup-db', destinationPath),
-  restore: (backupPath) => ipcRenderer.invoke('restore-db', backupPath),
-  openDbFolder: () => ipcRenderer.invoke('open-db-folder'),
-  // Diagnostics
-  logRendererError: (payload) => ipcRenderer.invoke('renderer-error-log', payload)
+  logRendererError: (payload) => invoke('renderer-error-log', payload),
+
+  diagnostics: {
+    getInfo: () => invoke('get-diagnostic-info'),
+    getLogs: () => invoke('get-diagnostic-logs'),
+    export: () => invoke('export-diagnostics'),
+    openLogsFolder: () => invoke('open-logs-folder'),
+  },
+
+  update: {
+    getVersion: () => invoke('update-get-version'),
+    checkForUpdates: () => invoke('update-check-for-updates'),
+    downloadUpdate: () => Promise.resolve(null),
+    installUpdate: () => Promise.resolve(null),
+    onUpdateAvailable: () => undefined,
+    onUpdateProgress: () => undefined,
+    onUpdateReady: () => undefined,
+    onUpdateError: () => undefined,
+  },
+});
+
+contextBridge.exposeInMainWorld('electron', {
+  ipcRenderer: {
+    invoke: (channel, ...args) => invoke(channel, ...args),
+  },
 });

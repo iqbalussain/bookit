@@ -12,6 +12,7 @@
 export type ConflictHandler = (collection: string, latest: any) => void;
 
 let onConflict: ConflictHandler | null = null;
+const REQUEST_TIMEOUT_MS = 4000;
 export function setConflictHandler(fn: ConflictHandler) {
   onConflict = fn;
 }
@@ -31,11 +32,19 @@ export function isRemoteEnabled(): boolean {
 async function request(method: string, path: string, body?: unknown): Promise<any> {
   const base = getServerUrl();
   if (!base) throw new Error('Remote disabled');
-  const res = await fetch(`${base}${path}`, {
-    method,
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(`${base}${path}`, {
+      method,
+      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
   if (res.status === 409) {
     const data = await res.json().catch(() => ({}));
     if (onConflict) onConflict(path, data?.latest);
@@ -49,14 +58,19 @@ async function request(method: string, path: string, body?: unknown): Promise<an
 }
 
 export async function pingServer(url: string): Promise<{ ok: true; time: number } | { ok: false; error: string }> {
+  let timeoutId: number | undefined;
   try {
     const cleaned = url.trim().replace(/\/+$/, '');
-    const res = await fetch(`${cleaned}/api/health`, { method: 'GET' });
+    const controller = new AbortController();
+    timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const res = await fetch(`${cleaned}/api/health`, { method: 'GET', signal: controller.signal });
     if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
     const data = await res.json();
     return { ok: true, time: data.time };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  } finally {
+    if (timeoutId) window.clearTimeout(timeoutId);
   }
 }
 

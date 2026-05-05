@@ -33,7 +33,6 @@
 
   "win": {
     "target": ["nsis"],
-    "icon": "public/icon.ico",
     "signAndEditExecutable": false
   },
 

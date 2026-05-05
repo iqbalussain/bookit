@@ -32,9 +32,11 @@ export function useLocalStorage<T>(
   const setValue = useCallback(
     (value: T | ((prev: T) => T)) => {
       try {
-        const newValue = value instanceof Function ? value(storedValue) : value;
-        window.localStorage.setItem(key, JSON.stringify(newValue));
-        setStoredValue(newValue);
+        setStoredValue((prev) => {
+          const newValue = value instanceof Function ? value(prev) : value;
+          window.localStorage.setItem(key, JSON.stringify(newValue));
+          return newValue;
+        });
       } catch (error) {
         console.error(`[localStorage] Error writing key "${key}":`, error);
         const isQuota =
@@ -43,7 +45,7 @@ export function useLocalStorage<T>(
         dispatchStorageError(key, isQuota);
       }
     },
-    [key, storedValue],
+    [key],
   );
 
   useEffect(() => {
