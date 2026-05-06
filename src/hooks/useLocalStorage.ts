@@ -6,6 +6,8 @@ import { useState, useEffect, useCallback } from 'react';
  * to the toast system directly.
  */
 function dispatchStorageError(key: string, isQuota: boolean) {
+  if (typeof window === 'undefined') return;
+
   const message = isQuota
     ? `Storage is full — could not save "${key}". Please export a backup to free up space.`
     : `Could not save data for "${key}". Check your browser's storage permissions.`;
@@ -31,19 +33,22 @@ export function useLocalStorage<T>(
 
   const setValue = useCallback(
     (value: T | ((prev: T) => T)) => {
-      try {
-        setStoredValue((prev) => {
+      setStoredValue((prev) => {
+        try {
           const newValue = value instanceof Function ? value(prev) : value;
-          window.localStorage.setItem(key, JSON.stringify(newValue));
+          if (typeof window !== 'undefined') {
+            window.localStorage.setItem(key, JSON.stringify(newValue));
+          }
           return newValue;
-        });
-      } catch (error) {
-        console.error(`[localStorage] Error writing key "${key}":`, error);
-        const isQuota =
-          error instanceof DOMException &&
-          (error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED');
-        dispatchStorageError(key, isQuota);
-      }
+        } catch (error) {
+          console.error(`[localStorage] Error writing key "${key}":`, error);
+          const isQuota =
+            error instanceof DOMException &&
+            (error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED');
+          dispatchStorageError(key, isQuota);
+          return prev;
+        }
+      });
     },
     [key],
   );
