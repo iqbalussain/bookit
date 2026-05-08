@@ -84,10 +84,10 @@ export default function Settings() {
   const isElectron = typeof window !== 'undefined' && !!window.electronAPI;
 
   useEffect(() => {
-    if (!window.electronAPI?.update) return;
+    if (!(window.electronAPI as any)?.update) return;
     const loadVersion = async () => {
       try {
-        const version = await window.electronAPI!.update.getVersion();
+        const version = await (window.electronAPI as any).update.getVersion();
         setCurrentVersion(version);
       } catch (error) {
         console.error('Failed to get app version:', error);
@@ -103,13 +103,13 @@ export default function Settings() {
   }, [settings.theme, setTheme]);
 
   const handleCheckUpdates = async () => {
-    if (!window.electronAPI?.update) {
+    if (!(window.electronAPI as any)?.update) {
       toast({ title: 'Not available', description: 'Updates are only available in the desktop app.', variant: 'destructive' });
       return;
     }
     setChecking(true);
     try {
-      await window.electronAPI.update.checkForUpdates();
+      await (window.electronAPI as any).update.checkForUpdates();
       toast({
         title: 'Update check completed',
         description: 'If an update is available, you will see a notification.',
