@@ -24,6 +24,7 @@ export interface LineItem {
   quantity: number;
   rate: number;
   total: number;
+  percentage?: number;
   cost?: number;
   stock?: number;
   reorderLevel?: number;
@@ -67,6 +68,20 @@ export interface Quotation {
 
 // Invoice types
 export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'partial' | 'overdue' | 'cancelled';
+export type InvoiceType = 'normal' | 'project';
+export type DiscountType = 'percentage' | 'fixed';
+
+export interface ProjectInvoiceSummary {
+  projectTotalValue: number;
+  previousPercentage: number;
+  previousAmount: number;
+  currentPercentage: number;
+  currentAmount: number;
+  totalInvoicedPercentage: number;
+  totalInvoicedAmount: number;
+  remainingPercentage: number;
+  remainingAmount: number;
+}
 
 export interface Invoice {
   id: string;
@@ -74,12 +89,38 @@ export interface Invoice {
   clientId: string;
   salesmanId?: string;
   quotationId?: string;
+  invoiceType?: InvoiceType;
+  projectId?: string;
+  projectName?: string;
+  lpoNumber?: string;
+  projectTotalValue?: number;
+  totalPercentage?: number;
+  discountType?: DiscountType;
+  discountValue?: number;
+  discountAmount?: number;
+  subtotal?: number;
+  vatTotal?: number;
+  projectSummary?: ProjectInvoiceSummary;
   items: LineItem[];
   netTotal: number;
   status: InvoiceStatus;
   dueDate: string;
   notes: string;
   terms: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  totalValue: number;
+  lpoNumber: string;
+  totalInvoicedAmount: number;
+  totalInvoicedPercentage: number;
+  remainingAmount: number;
+  remainingPercentage: number;
+  linkedInvoiceIds: string[];
   createdAt: string;
   updatedAt: string;
 }

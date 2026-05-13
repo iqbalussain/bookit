@@ -9,6 +9,7 @@ import type {
   Invoice,
   JournalEntry,
   Payment,
+  Project,
   BusinessSettings,
   Company,
   PurchaseInvoice,
@@ -30,6 +31,7 @@ interface AppContextType {
   invoices: Invoice[];
   purchaseInvoices: PurchaseInvoice[];
   payments: Payment[];
+  projects: Project[];
   items: Item[];
   salesmen: Salesman[];
   accounts: Account[];
@@ -46,6 +48,7 @@ interface AppContextType {
   setInvoices: React.Dispatch<React.SetStateAction<Invoice[]>>;
   setPurchaseInvoices: React.Dispatch<React.SetStateAction<PurchaseInvoice[]>>;
   setPayments: React.Dispatch<React.SetStateAction<Payment[]>>;
+  setProjects: React.Dispatch<React.SetStateAction<Project[]>>;
   setSettings: React.Dispatch<React.SetStateAction<BusinessSettings>>;
   setSelectedCompanyId: React.Dispatch<React.SetStateAction<string>>;
 
@@ -66,6 +69,11 @@ interface AppContextType {
   deleteInvoice: (id: string) => void;
   generateInvoiceNumber: () => string;
   calculateInvoicePaymentStatus: (invoiceId: string) => Invoice['status'];
+
+  addProject: (project: Project) => void;
+  updateProject: (project: Project) => void;
+  deleteProject: (id: string) => void;
+  getProject: (id?: string) => Project | undefined;
 
   addPurchaseInvoice: (invoice: PurchaseInvoice) => void;
   updatePurchaseInvoice: (invoice: PurchaseInvoice) => void;
@@ -120,6 +128,26 @@ const defaultCompanies: Company[] = [{ id: 'default', name: 'Default Company' }]
 
 const safeArray = <T,>(arr: T[] | undefined | null): T[] => (Array.isArray(arr) ? arr : []);
 
+const recalculateProjects = (projects: Project[], invoices: Invoice[]): Project[] =>
+  safeArray(projects).map((project) => {
+    const linkedInvoices = safeArray(invoices).filter(
+      (invoice) => invoice.projectId === project.id && invoice.status !== 'cancelled'
+    );
+    const totalInvoicedAmount = linkedInvoices.reduce((sum, invoice) => sum + (Number(invoice.netTotal) || 0), 0);
+    const totalInvoicedPercentage = linkedInvoices.reduce(
+      (sum, invoice) => sum + (Number(invoice.totalPercentage) || 0),
+      0
+    );
+    return {
+      ...project,
+      totalInvoicedAmount,
+      totalInvoicedPercentage,
+      remainingAmount: Math.max(0, (Number(project.totalValue) || 0) - totalInvoicedAmount),
+      remainingPercentage: Math.max(0, 100 - totalInvoicedPercentage),
+      linkedInvoiceIds: linkedInvoices.map((invoice) => invoice.id),
+    };
+  });
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [clients, setClients] = useRemoteCollection<Client>('clients', 'app_clients', []);
   const [quotations, setQuotations] = useRemoteCollection<Quotation>('quotations', 'app_quotations', []);
@@ -130,6 +158,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     []
   );
   const [payments, setPayments] = useRemoteCollection<Payment>('payments', 'app_payments', []);
+  const [projects, setProjects] = useRemoteCollection<Project>('projects', 'app_projects', []);
   const [items, setItems] = useLocalStorage<Item[]>('app_items', []);
   const [salesmen, setSalesmen] = useLocalStorage<Salesman[]>('app_salesmen', []);
   const [accounts, setAccounts] = useLocalStorage<Account[]>('app_accounts', DEFAULT_ACCOUNTS);
@@ -178,6 +207,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [clients]);
 
   const getSalesman = useCallback((id?: string) => safeArray(salesmen).find((s) => s.id === id), [salesmen]);
+  const getProject = useCallback((id?: string) => safeArray(projects).find((p) => p.id === id), [projects]);
 
   const nextNumber = useCallback((prefix: string, existing: Array<{ number?: string }>) => {
     const max = safeArray(existing).reduce((highest, item) => {
@@ -215,18 +245,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updatedAt: invoice.updatedAt || new Date().toISOString(),
     };
 
-    setInvoices((prev) => [...safeArray(prev), safeInvoice as Invoice]);
+    const nextInvoices = [...safeArray(invoices), safeInvoice as Invoice];
+    setInvoices(nextInvoices);
+    setProjects((prevProjects) => recalculateProjects(prevProjects, nextInvoices));
     addAudit({ type: 'invoice', action: 'created', target: safeInvoice.number, value: safeInvoice.netTotal });
-  }, [addAudit, setInvoices]);
+  }, [addAudit, invoices, setInvoices, setProjects]);
 
   const updateInvoice = useCallback((invoice: Invoice) => {
-    setInvoices((prev) => safeArray(prev).map((i) => (i.id === invoice.id ? invoice : i)));
+    const nextInvoices = safeArray(invoices).map((i) => (i.id === invoice.id ? invoice : i));
+    setInvoices(nextInvoices);
+    setProjects((prevProjects) => recalculateProjects(prevProjects, nextInvoices));
     addAudit({ type: 'invoice', action: 'updated', target: invoice.number, value: invoice.netTotal });
-  }, [addAudit, setInvoices]);
+  }, [addAudit, invoices, setInvoices, setProjects]);
 
   const deleteInvoice = useCallback((id: string) => {
-    setInvoices((prev) => safeArray(prev).filter((i) => i.id !== id));
-  }, [setInvoices]);
+    const nextInvoices = safeArray(invoices).filter((i) => i.id !== id);
+    setInvoices(nextInvoices);
+    setProjects((prevProjects) => recalculateProjects(prevProjects, nextInvoices));
+  }, [invoices, setInvoices, setProjects]);
+
+  const addProject = useCallback((project: Project) => {
+    setProjects((prev) => recalculateProjects([...safeArray(prev), project], invoices));
+    addAudit({ type: 'settings', action: 'created', target: `Project ${project.name}`, value: project.totalValue });
+  }, [addAudit, invoices, setProjects]);
+
+  const updateProject = useCallback((project: Project) => {
+    setProjects((prev) => recalculateProjects(safeArray(prev).map((p) => (p.id === project.id ? project : p)), invoices));
+    addAudit({ type: 'settings', action: 'updated', target: `Project ${project.name}`, value: project.totalValue });
+  }, [addAudit, invoices, setProjects]);
+
+  const deleteProject = useCallback((id: string) => {
+    setProjects((prev) => safeArray(prev).filter((p) => p.id !== id));
+  }, [setProjects]);
 
   const addPurchaseInvoice = useCallback((invoice: PurchaseInvoice) => {
     setPurchaseInvoices((prev) => [...safeArray(prev), invoice]);
@@ -383,6 +433,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       invoices: safeArray(invoices),
       purchaseInvoices: safeArray(purchaseInvoices),
       payments: safeArray(payments),
+      projects: recalculateProjects(safeArray(projects), safeArray(invoices)),
       items: safeArray(items),
       salesmen: safeArray(salesmen),
       accounts: safeArray(accounts).length ? safeArray(accounts) : DEFAULT_ACCOUNTS,
@@ -399,6 +450,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setInvoices,
       setPurchaseInvoices,
       setPayments,
+      setProjects,
       setSettings,
       setSelectedCompanyId,
 
@@ -419,6 +471,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       deleteInvoice,
       generateInvoiceNumber,
       calculateInvoicePaymentStatus,
+
+      addProject,
+      updateProject,
+      deleteProject,
+      getProject,
 
       addPurchaseInvoice,
       updatePurchaseInvoice,
@@ -460,6 +517,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       invoices,
       purchaseInvoices,
       payments,
+      projects,
       items,
       salesmen,
       accounts,
@@ -484,6 +542,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       deleteInvoice,
       generateInvoiceNumber,
       calculateInvoicePaymentStatus,
+      addProject,
+      updateProject,
+      deleteProject,
+      getProject,
       addPurchaseInvoice,
       updatePurchaseInvoice,
       deletePurchaseInvoice,
