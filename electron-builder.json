@@ -1,6 +1,6 @@
 {
-  "appId": "com.Bookit.app",
-  "productName": "Bookit",
+  "appId": "com.MITC.app",
+  "productName": "MITC",
 
   "directories": {
     "buildResources": "public",

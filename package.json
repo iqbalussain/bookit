@@ -1,9 +1,9 @@
 {
   "name": "bookit",
-  "productName": "Bookit",
+  "productName": "MITC",
   "version": "2.0.0",
   "type": "module",
-  "description": "Bookit - Modern booking management desktop application built with Electron and React.",
+  "description": "MITC - Modern booking management desktop application built with Electron and React.",
   "author": "Iqbal Ussain",
   "private": true,
   "main": "main.cjs",

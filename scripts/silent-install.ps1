@@ -1,27 +1,27 @@
-# Bookit Silent Installation Script (PowerShell)
+# MITC Silent Installation Script (PowerShell)
 # 
 # Usage:
-#   .\silent-install.ps1 -InstallerPath "C:\path\to\Bookit Setup.exe"
-#   .\silent-install.ps1 -InstallerPath "C:\path\to\Bookit Setup.exe" -InstallPath "D:\Bookit"
-#   .\silent-install.ps1 -InstallerPath "C:\path\to\Bookit Setup.exe" -NoRestart
+#   .\silent-install.ps1 -InstallerPath "C:\path\to\MITC Setup.exe"
+#   .\silent-install.ps1 -InstallerPath "C:\path\to\MITC Setup.exe" -InstallPath "D:\MITC"
+#   .\silent-install.ps1 -InstallerPath "C:\path\to\MITC Setup.exe" -NoRestart
 #
 # Prerequisites:
 #   - Run as Administrator
 #   - PowerShell Execution Policy allows scripts: Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
 #
 # Parameters:
-#   -InstallerPath  : Full path to Bookit Setup.exe (required)
-#   -InstallPath    : Installation directory (default: C:\Program Files\Bookit)
+#   -InstallerPath  : Full path to MITC Setup.exe (required)
+#   -InstallPath    : Installation directory (default: C:\Program Files\MITC)
 #   -NoRestart      : Do not restart after installation (default: restart if needed)
 #   -Quiet          : No console output except errors (default: verbose)
-#   -LogPath        : Custom log file path (default: %APPDATA%\Bookit\installer-logs\)
+#   -LogPath        : Custom log file path (default: %APPDATA%\MITC\installer-logs\)
 
 param(
     [Parameter(Mandatory=$false)]
     [string]$InstallerPath,
     
     [Parameter(Mandatory=$false)]
-    [string]$InstallPath = "$env:ProgramFiles\Bookit",
+    [string]$InstallPath = "$env:ProgramFiles\MITC",
     
     [Parameter(Mandatory=$false)]
     [switch]$NoRestart,
@@ -38,12 +38,12 @@ param(
 # ============================================================
 
 $ScriptVersion = "1.0.0"
-$AppName = "Bookit"
+$AppName = "MITC"
 $MinDiskSpace = 500MB  # 500 MB minimum
 
 # Setup logging
 if (-not $LogPath) {
-    $LogDir = "$env:LOCALAPPDATA\Bookit\installer-logs"
+    $LogDir = "$env:LOCALAPPDATA\MITC\installer-logs"
     $LogFile = "$LogDir\install-$(Get-Date -Format 'yyyy-MM-dd-HH-mm-ss').log"
 } else {
     $LogFile = $LogPath
@@ -101,7 +101,7 @@ function Write-Header {
 # MAIN INSTALLATION LOGIC
 # ============================================================
 
-Write-Header "Bookit Silent Installer v$ScriptVersion"
+Write-Header "MITC Silent Installer v$ScriptVersion"
 Write-Log "Installation started by user: $env:USERNAME on machine: $env:COMPUTERNAME"
 Write-Log "Log file: $LogFile"
 
@@ -132,7 +132,7 @@ Write-Log "Searching for installer..."
 if ([string]::IsNullOrEmpty($InstallerPath)) {
     # Auto-detect in current directory
     $CurrentDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-    $Installers = Get-ChildItem "$CurrentDir\Bookit Setup*.exe" -ErrorAction SilentlyContinue
+    $Installers = Get-ChildItem "$CurrentDir\MITC Setup*.exe" -ErrorAction SilentlyContinue
     
     if ($Installers) {
         $InstallerPath = $Installers[0].FullName
@@ -140,7 +140,7 @@ if ([string]::IsNullOrEmpty($InstallerPath)) {
     } else {
         Write-Log "ERROR: Installer not found. Use -InstallerPath to specify location" "Error"
         Write-Host "ERROR: Installer not found!" -ForegroundColor Red
-        Write-Host "Usage: .\silent-install.ps1 -InstallerPath 'C:\Path\To\Bookit Setup.exe'" -ForegroundColor Yellow
+        Write-Host "Usage: .\silent-install.ps1 -InstallerPath 'C:\Path\To\MITC Setup.exe'" -ForegroundColor Yellow
         exit 2
     }
 } else {
@@ -202,17 +202,17 @@ Write-Log "RAM: $($RamGB.ToString('F1')) GB"
 
 Write-Header "Pre-Installation Tasks"
 
-# Stop running Bookit instances
-Write-Log "Checking for running Bookit processes..."
-$BookitProcesses = Get-Process -Name Bookit -ErrorAction SilentlyContinue
+# Stop running MITC instances
+Write-Log "Checking for running MITC processes..."
+$MITCProcesses = Get-Process -Name MITC -ErrorAction SilentlyContinue
 
-if ($BookitProcesses) {
-    Write-Log "Terminating Bookit process..."
-    $BookitProcesses | Stop-Process -Force -ErrorAction SilentlyContinue
+if ($MITCProcesses) {
+    Write-Log "Terminating MITC process..."
+    $MITCProcesses | Stop-Process -Force -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 2
-    Write-Log "✓ Bookit process terminated"
+    Write-Log "✓ MITC process terminated"
 } else {
-    Write-Log "✓ No Bookit processes running"
+    Write-Log "✓ No MITC processes running"
 }
 
 # Create installation directory
@@ -227,7 +227,7 @@ Write-Log "✓ Installation directory ready: $InstallPath"
 # PERFORM INSTALLATION
 # ============================================================
 
-Write-Header "Installing Bookit"
+Write-Header "Installing MITC"
 
 Write-Log "Executing installer with parameters:"
 Write-Log "  Path: $InstallerPath"
@@ -266,26 +266,26 @@ Write-Header "Verifying Installation"
 
 Start-Sleep -Seconds 3
 
-if (Test-Path "$InstallPath\Bookit.exe") {
-    Write-Log "✓ Bookit.exe successfully installed"
-    $ExeSize = (Get-Item "$InstallPath\Bookit.exe").Length / 1MB
+if (Test-Path "$InstallPath\MITC.exe") {
+    Write-Log "✓ MITC.exe successfully installed"
+    $ExeSize = (Get-Item "$InstallPath\MITC.exe").Length / 1MB
     Write-Log "  Binary size: $($ExeSize.ToString('F2')) MB"
     
     # Check if shortcuts directory exists
-    $ShortcutsPath = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Bookit"
+    $ShortcutsPath = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\MITC"
     if (Test-Path $ShortcutsPath) {
         Write-Log "✓ Start Menu shortcuts created"
     }
     
     # Create desktop shortcut if not exists
-    $DesktopShortcut = "$env:USERPROFILE\Desktop\Bookit.lnk"
+    $DesktopShortcut = "$env:USERPROFILE\Desktop\MITC.lnk"
     if (-not (Test-Path $DesktopShortcut)) {
         Write-Log "Creating desktop shortcut..."
         $Shell = New-Object -ComObject WScript.Shell
         $Shortcut = $Shell.CreateShortCut($DesktopShortcut)
-        $Shortcut.TargetPath = "$InstallPath\Bookit.exe"
+        $Shortcut.TargetPath = "$InstallPath\MITC.exe"
         $Shortcut.WorkingDirectory = $InstallPath
-        $Shortcut.Description = "Bookit - Accounting Management System"
+        $Shortcut.Description = "MITC - Accounting Management System"
         $Shortcut.Save()
         Write-Log "✓ Desktop shortcut created"
     }
@@ -298,7 +298,7 @@ if (Test-Path "$InstallPath\Bookit.exe") {
     Write-Log "Installation completed successfully" "Success"
     
     if (-not $Quiet) {
-        Write-Host "✓ Bookit has been installed successfully!" -ForegroundColor Green
+        Write-Host "✓ MITC has been installed successfully!" -ForegroundColor Green
         Write-Host ""
         Write-Host "Installation Details:" -ForegroundColor Yellow
         Write-Host "  Location: $InstallPath"
@@ -306,7 +306,7 @@ if (Test-Path "$InstallPath\Bookit.exe") {
         Write-Host "  Log file: $LogFile"
         Write-Host ""
         Write-Host "Next Steps:" -ForegroundColor Yellow
-        Write-Host "  1. Find 'Bookit' in Start Menu or Desktop shortcut"
+        Write-Host "  1. Find 'MITC' in Start Menu or Desktop shortcut"
         Write-Host "  2. Click to launch the application"
         Write-Host "  3. On first launch, the database will be created"
         Write-Host ""
@@ -322,7 +322,7 @@ if (Test-Path "$InstallPath\Bookit.exe") {
     # FAILURE
     # ============================================================
     
-    Write-Log "ERROR: Installation verification failed - Bookit.exe not found at $InstallPath" "Error"
+    Write-Log "ERROR: Installation verification failed - MITC.exe not found at $InstallPath" "Error"
     Write-Header "Installation Failed!"
     
     Write-Host "✗ Installation could not be verified." -ForegroundColor Red

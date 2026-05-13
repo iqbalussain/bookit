@@ -11,7 +11,7 @@ class InstallerDiagnostics {
   }
 
   getInstallerLogsDirectory() {
-    return path.join(os.homedir(), 'AppData', 'Local', 'Bookit', 'installer-logs');
+    return path.join(os.homedir(), 'AppData', 'Local', 'MITC', 'installer-logs');
   }
 
   ensureDirectory(dirPath) {
@@ -49,7 +49,7 @@ class InstallerDiagnostics {
   logInstall() {
     this.log('=== INSTALLATION ===');
     this.log(`Install Path: ${process.execPath}`);
-    this.log(`User Data Path: ${path.join(os.homedir(), 'AppData', 'Local', 'Bookit')}`);
+    this.log(`User Data Path: ${path.join(os.homedir(), 'AppData', 'Local', 'MITC')}`);
     this.log('Creating shortcuts and registry entries');
     this.logSystemInfo();
   }

@@ -62,8 +62,8 @@ function StorageErrorListener() {
       });
     };
 
-    window.addEventListener("Bookit:storage-error", handler);
-    return () => window.removeEventListener("Bookit:storage-error", handler);
+    window.addEventListener("MITC:storage-error", handler);
+    return () => window.removeEventListener("MITC:storage-error", handler);
   }, []);
 
   useEffect(() => {

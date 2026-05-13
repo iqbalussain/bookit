@@ -33,7 +33,7 @@ jobs:
       - name: Upload EXE
         uses: actions/upload-artifact@v4
         with:
-          name: Bookit-EXE
+          name: MITC-EXE
           path: |
             dist/*.exe
             release/*.exe
