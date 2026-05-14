@@ -20,6 +20,7 @@ import {
   Sun,
   Moon,
   ArrowRight,
+  Briefcase,
 } from 'lucide-react';
 
 interface AppLayoutProps {
@@ -28,6 +29,7 @@ interface AppLayoutProps {
 
 const navItems = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { name: 'Projects', href: '/projects', icon: Briefcase },
   { name: 'Quotations', href: '/quotations', icon: FileText },
   { name: 'Sales', href: '/invoices', icon: Receipt },
   { name: 'Purchases', href: '/purchases', icon: ShoppingCart },

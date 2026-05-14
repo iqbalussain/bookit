@@ -312,6 +312,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
     if (total > 0 && paid >= total) return 'paid';
     if (paid > 0) return 'partial';
+    
+    // For project invoices, approvalStatus 'paid' check
+    if (invoice?.approvalStatus === 'paid') return 'paid';
+
     return invoice?.status === 'draft' ? 'draft' : 'sent';
   }, [invoices, payments, purchaseInvoices]);
 
@@ -433,7 +437,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       invoices: safeArray(invoices),
       purchaseInvoices: safeArray(purchaseInvoices),
       payments: safeArray(payments),
-      projects: recalculateProjects(safeArray(projects), safeArray(invoices)),
+      projects: recalculateProjects(safeArray(projects), safeArray(invoices)).map(p => ({
+        ...p,
+        totalPaymentReceived: safeArray(payments)
+          .filter(pay => p.linkedInvoiceIds?.includes(pay.invoiceId))
+          .reduce((sum, pay) => sum + (Number(pay.amount) || 0), 0)
+      })),
       items: safeArray(items),
       salesmen: safeArray(salesmen),
       accounts: safeArray(accounts).length ? safeArray(accounts) : DEFAULT_ACCOUNTS,

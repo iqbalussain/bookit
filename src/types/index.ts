@@ -9,6 +9,7 @@ export interface Client {
   phone: string;
   address: string;
   type: PartyType;
+  contactPerson?: string;
   paymentTermsDays?: number;
   taxRegistrationNumber?: string;
   creditLimit?: number;
@@ -31,6 +32,8 @@ export interface LineItem {
   vatApplicable?: boolean;
   vatPercentage?: number;
   vatAmount?: number;
+  activityId?: string;
+  completionPercentage?: number;
 }
 
 // Item master
@@ -68,6 +71,7 @@ export interface Quotation {
 
 // Invoice types
 export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'partial' | 'overdue' | 'cancelled';
+export type InvoiceApprovalStatus = 'pending' | 'site_engineer' | 'qc' | 'project_manager' | 'accounts' | 'paid';
 export type InvoiceType = 'normal' | 'project';
 export type DiscountType = 'percentage' | 'fixed';
 
@@ -104,6 +108,7 @@ export interface Invoice {
   items: LineItem[];
   netTotal: number;
   status: InvoiceStatus;
+  approvalStatus?: InvoiceApprovalStatus;
   dueDate: string;
   notes: string;
   terms: string;
@@ -111,15 +116,31 @@ export interface Invoice {
   updatedAt: string;
 }
 
+export type ProjectStatus = 'active' | 'completed' | 'cancelled' | 'pending_valuation';
+
+export interface ProjectActivity {
+  id: string;
+  name: string;
+  percentage: number;
+  amount: number;
+}
+
 export interface Project {
   id: string;
+  vendorId: string;
   name: string;
   totalValue: number;
   lpoNumber: string;
+  startDate: string;
+  endDate: string;
+  status: ProjectStatus;
+  valuationCompleted: boolean;
+  activities: ProjectActivity[];
   totalInvoicedAmount: number;
   totalInvoicedPercentage: number;
   remainingAmount: number;
   remainingPercentage: number;
+  totalPaymentReceived?: number;
   linkedInvoiceIds: string[];
   createdAt: string;
   updatedAt: string;

@@ -13,6 +13,8 @@ import { setConflictHandler } from "@/lib/apiClient";
 
 import Dashboard from "./pages/Dashboard";
 import NotFound from "./pages/NotFound";
+import ProjectsList from "./pages/ProjectsList";
+import ProjectForm from "./pages/ProjectForm";
 
 import QuotationsList from "./pages/QuotationsList";
 import QuotationForm from "./pages/QuotationForm";
@@ -99,6 +101,9 @@ const App = () => (
               <AppLayout>
                 <Routes>
                     <Route path="/" element={<ErrorBoundary inline><Dashboard /></ErrorBoundary>} />
+                    <Route path="/projects" element={<ErrorBoundary inline><ProjectsList /></ErrorBoundary>} />
+                    <Route path="/projects/new" element={<ErrorBoundary inline><ProjectForm /></ErrorBoundary>} />
+                    <Route path="/projects/:id" element={<ErrorBoundary inline><ProjectForm /></ErrorBoundary>} />
                     <Route path="/quotations" element={<ErrorBoundary inline><QuotationsList /></ErrorBoundary>} />
                     <Route path="/quotations/new" element={<ErrorBoundary inline><QuotationForm /></ErrorBoundary>} />
                     <Route path="/quotations/:id" element={<ErrorBoundary inline><QuotationForm /></ErrorBoundary>} />
