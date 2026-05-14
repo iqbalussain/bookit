@@ -157,8 +157,8 @@ export async function generatePDFBlob({ type, document: docData, client, setting
         }
         
         .logo { 
-          width: 100px; 
-          height: 100px; 
+          width: 120px; 
+          height: 120px; 
           object-fit: contain; 
           flex-shrink: 0;
         }
@@ -726,7 +726,7 @@ export async function generatePDFBlob({ type, document: docData, client, setting
     
     const worker = html2pdf()
       .set({
-        margin: [22, 3, 8, 3],
+        margin: [3, 3, 2, 3],
         filename: `${type}-${docData.number}.pdf`,
         image: { type: 'jpeg', quality: 0.95 },
         html2canvas: {
