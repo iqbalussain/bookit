@@ -35,10 +35,9 @@ export function useRemoteCollection<T extends { id: string }>(
           previousRef.current = rows as T[];
         }
         lastSync.current = Date.now();
-      })
+    })
       .catch(err => console.warn(`[remote] list ${collection} failed:`, err.message));
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collection, remote, serverUrl]);
 
   // Poll for changes
@@ -68,7 +67,6 @@ export function useRemoteCollection<T extends { id: string }>(
       }
     }, 5000);
     return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collection, remote, serverUrl]);
 
   // Push local mutations to server (diff against previous)

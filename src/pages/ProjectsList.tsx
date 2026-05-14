@@ -114,7 +114,7 @@ export default function ProjectsList() {
       theme: 'grid',
     });
     
-    let nextY = (doc as any).lastAutoTable.finalY + 15;
+    const nextY = (doc as any).lastAutoTable.finalY + 15;
     
     // Invoices Table
     doc.setFontSize(14);

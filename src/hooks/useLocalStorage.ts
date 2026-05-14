@@ -53,8 +53,6 @@ export function useLocalStorage<T>(
     [key],
   );
 
-  // Re-read only when the storage key changes (not when initialValue identity changes).
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     setStoredValue(readValue());
   }, [key]);
