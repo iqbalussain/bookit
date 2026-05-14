@@ -342,9 +342,3 @@ export interface ElectronAPI {
   };
 }
 
-// Extend Window interface
-declare global {
-  interface Window {
-    electronAPI?: ElectronAPI;
-  }
-}
