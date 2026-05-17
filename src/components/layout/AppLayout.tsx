@@ -5,6 +5,7 @@ import { MobileBottomNav } from '@/components/layout/MobileBottomNav';
 import { FloatingActionButton } from '@/components/layout/FloatingActionButton';
 import { Button } from '@/components/ui/button';
 import { useTheme } from 'next-themes';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   LayoutDashboard,
   FileText,
@@ -21,6 +22,7 @@ import {
   Moon,
   ArrowRight,
   Briefcase,
+  LogOut,
 } from 'lucide-react';
 
 interface AppLayoutProps {
@@ -54,6 +56,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [reportsOpen, setReportsOpen] = useState(location.pathname.startsWith('/reports'));
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const { signOut, user } = useAuth();
 
   useEffect(() => {
     setMounted(true);
@@ -204,6 +207,9 @@ export function AppLayout({ children }: AppLayoutProps) {
                   <Link to="/invoices/new" className="flex items-center gap-2">
                     <Receipt className="h-4 w-4" /> New Invoice
                   </Link>
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => signOut()} title={user?.email ?? 'Sign out'}>
+                  <LogOut className="h-4 w-4" />
                 </Button>
               </div>
             </div>
