@@ -559,7 +559,7 @@ export async function generatePDFBlob({ type, document: docData, client, setting
                 </td>
                 <td class="numeric col-qty">${item.quantity}</td>
                 <td class="numeric col-rate">${formatMoney(item.rate)}</td>
-                <td class="numeric col-amount">${formatMoney(item.total + (item.vatApplicable ? (item.vatAmount ?? 0) : 0))}</td>
+                <td class="numeric col-amount">${formatMoney(item.total)}${item.vatApplicable && (item.vatAmount ?? 0) > 0 ? `<div style="font-size:10px;color:#555;">+VAT ${formatPct(item.vatPercentage ?? 0)} (${formatMoney(item.vatAmount ?? 0)})</div>` : ''}</td>
               `}
             </tr>
             `).join('')}
