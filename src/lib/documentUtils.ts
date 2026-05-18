@@ -118,6 +118,276 @@ export async function generatePDFBlob({ type, document: docData, client, setting
   const formatMoney = (value: number) => `${currencySymbol}${(Number(value) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const formatPct = (value: number) => `${(Number(value) || 0).toFixed(2).replace(/\.00$/, '')}%`;
 
+  const { jsPDF } = await import('jspdf');
+  const autoTableModule = await import('jspdf-autotable');
+  const autoTable = autoTableModule.default;
+  const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const margin = 14;
+  const usableWidth = pageWidth - margin * 2;
+  const moneyPrefix = settings.currency === 'OMR' ? 'OMR ' : `${currencySymbol}`;
+  const pdfMoney = (value: number) => `${moneyPrefix}${(Number(value) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const clean = (value: unknown) => String(value ?? '').replace(/\s+/g, ' ').trim();
+  const sectionTitle = (title: string, y: number) => {
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(9);
+    pdf.setTextColor(107, 114, 128);
+    pdf.text(title.toUpperCase(), margin, y);
+    pdf.setTextColor(17, 24, 39);
+  };
+  const addWrapped = (text: string, x: number, y: number, width: number, lineHeight = 4.6) => {
+    const lines = pdf.splitTextToSize(clean(text), width);
+    pdf.text(lines, x, y);
+    return y + lines.length * lineHeight;
+  };
+  const addHeader = () => {
+    pdf.setFillColor(248, 250, 252);
+    pdf.rect(0, 0, pageWidth, 33, 'F');
+
+    if (settings.logo) {
+      try {
+        pdf.addImage(settings.logo, 'PNG', margin, 7, 20, 20, undefined, 'FAST');
+      } catch {
+        try {
+          pdf.addImage(settings.logo, 'JPEG', margin, 7, 20, 20, undefined, 'FAST');
+        } catch {
+          // Logo is optional; keep the document generation resilient.
+        }
+      }
+    }
+
+    const businessX = settings.logo ? margin + 25 : margin;
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(14);
+    pdf.setTextColor(37, 99, 235);
+    pdf.text(clean(settings.name || 'Your Business'), businessX, 12, { maxWidth: 95 });
+
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(8);
+    pdf.setTextColor(75, 85, 99);
+    const businessMeta = [
+      settings.email,
+      settings.phone,
+      settings.address,
+      settings.taxNumber ? `VAT: ${settings.taxNumber}` : '',
+    ].filter(Boolean).map(clean);
+    pdf.text(businessMeta, businessX, 17, { maxWidth: 100, lineHeightFactor: 1.35 });
+
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(18);
+    pdf.setTextColor(isInvoice ? 16 : 37, isInvoice ? 185 : 99, isInvoice ? 129 : 235);
+    pdf.text(isProjectInvoice ? 'PROJECT INVOICE' : isInvoice ? 'INVOICE' : 'QUOTATION', pageWidth - margin, 12, { align: 'right' });
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(9);
+    pdf.setTextColor(55, 65, 81);
+    pdf.text(`No: ${clean(docData.number)}`, pageWidth - margin, 18, { align: 'right' });
+    pdf.text(`Date: ${new Date(docData.createdAt).toLocaleDateString('en-IN')}`, pageWidth - margin, 23, { align: 'right' });
+    if (isInvoice && invoice?.dueDate) {
+      pdf.text(`Due: ${new Date(invoice.dueDate).toLocaleDateString('en-IN')}`, pageWidth - margin, 28, { align: 'right' });
+    }
+  };
+  const ensureRoom = (y: number, needed = 30) => {
+    if (y + needed <= pageHeight - margin) return y;
+    pdf.addPage();
+    addHeader();
+    return 45;
+  };
+
+  addHeader();
+
+  let y = 44;
+  sectionTitle('Bill To', y);
+  y += 6;
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(11);
+  pdf.text(clean(client?.name || 'Client'), margin, y);
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(9);
+  y += 5;
+  y = addWrapped([client?.email, client?.phone, client?.address, client?.taxRegistrationNumber ? `VAT: ${client.taxRegistrationNumber}` : ''].filter(Boolean).join('\n'), margin, y, 85);
+
+  if (settings.taxNumber) {
+    sectionTitle('VAT Details', 44);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(9);
+    pdf.text(`Supplier VAT No: ${clean(settings.taxNumber)}`, pageWidth - margin, 50, { align: 'right' });
+  }
+
+  if (isProjectInvoice) {
+    y = ensureRoom(Math.max(y + 6, 70), 24);
+    autoTable(pdf, {
+      startY: y,
+      body: [
+        ['Project', clean(invoice?.projectName || invoice?.projectId || '-')],
+        ['LPO Number', clean(invoice?.lpoNumber || '-')],
+        ['Project Value', pdfMoney(invoice?.projectTotalValue || 0)],
+      ],
+      theme: 'grid',
+      styles: { font: 'helvetica', fontSize: 8, cellPadding: 2.2, textColor: [17, 24, 39], lineColor: [229, 231, 235], lineWidth: 0.15 },
+      columnStyles: { 0: { fontStyle: 'bold', fillColor: [248, 250, 252], cellWidth: 35 }, 1: { cellWidth: usableWidth - 35 } },
+      margin: { left: margin, right: margin },
+    });
+    y = ((pdf as any).lastAutoTable?.finalY || y) + 8;
+  } else {
+    y = Math.max(y + 8, 72);
+  }
+
+  const regularRows = docData.items.map((item, index) => {
+    const taxable = Number(item.total) || 0;
+    const itemVat = item.vatApplicable ? Number(item.vatAmount ?? 0) || 0 : 0;
+    return [
+      String(index + 1),
+      [clean(item.name), clean(item.description)].filter(Boolean).join('\n'),
+      (Number(item.quantity) || 0).toLocaleString('en-IN'),
+      pdfMoney(Number(item.rate) || 0),
+      pdfMoney(taxable),
+      item.vatApplicable ? `${Number(item.vatPercentage ?? 0).toFixed(2).replace(/\.00$/, '')}%` : '-',
+      pdfMoney(itemVat),
+      pdfMoney(taxable + itemVat),
+    ];
+  });
+  const projectRows = docData.items.map((item, index) => [
+    String(index + 1),
+    clean(item.description || item.name),
+    formatPct(item.completionPercentage || item.percentage || 0),
+    pdfMoney(Number(item.total) || 0),
+  ]);
+
+  autoTable(pdf, {
+    startY: y,
+    head: [isProjectInvoice
+      ? ['S.No', 'Description of Activities', 'Payment %', 'Amount']
+      : ['S.No', 'Description', 'Qty', 'Rate', 'Subtotal', 'VAT %', 'VAT', 'Total']],
+    body: isProjectInvoice ? projectRows : regularRows,
+    theme: 'grid',
+    margin: { left: margin, right: margin, top: 38, bottom: 18 },
+    styles: {
+      font: 'helvetica',
+      fontSize: 8,
+      cellPadding: 2,
+      overflow: 'linebreak',
+      valign: 'top',
+      textColor: [17, 24, 39],
+      lineColor: [229, 231, 235],
+      lineWidth: 0.12,
+    },
+    headStyles: { fillColor: [243, 244, 246], textColor: [75, 85, 99], fontStyle: 'bold' },
+    columnStyles: isProjectInvoice
+      ? { 0: { halign: 'center', cellWidth: 14 }, 1: { cellWidth: 116 }, 2: { halign: 'right', cellWidth: 28 }, 3: { halign: 'right', cellWidth: 28 } }
+      : { 0: { halign: 'center', cellWidth: 12 }, 1: { cellWidth: 54 }, 2: { halign: 'right', cellWidth: 15 }, 3: { halign: 'right', cellWidth: 23 }, 4: { halign: 'right', cellWidth: 23 }, 5: { halign: 'right', cellWidth: 15 }, 6: { halign: 'right', cellWidth: 21 }, 7: { halign: 'right', cellWidth: 23 } },
+    didDrawPage: (data) => {
+      if (data.pageNumber > 1) addHeader();
+    },
+  });
+
+  y = ((pdf as any).lastAutoTable?.finalY || y) + 8;
+  y = ensureRoom(y, 70);
+
+  const totalsX = pageWidth - margin - 74;
+  autoTable(pdf, {
+    startY: y,
+    body: [
+      ['Subtotal', pdfMoney(subtotal)],
+      ...(discountAmount > 0 ? [['Discount', `-${pdfMoney(discountAmount)}`]] : []),
+      ['VAT', pdfMoney(vatTotal)],
+      ['Total Amount', pdfMoney(docData.netTotal)],
+    ],
+    theme: 'plain',
+    margin: { left: totalsX, right: margin },
+    styles: { font: 'helvetica', fontSize: 10, cellPadding: 2.2 },
+    columnStyles: { 0: { cellWidth: 35, fontStyle: 'bold', textColor: [75, 85, 99] }, 1: { cellWidth: 39, halign: 'right', fontStyle: 'bold' } },
+    didParseCell: (data) => {
+      if (data.row.index === data.table.body.length - 1) {
+        data.cell.styles.fillColor = [248, 250, 252];
+        data.cell.styles.fontSize = 12;
+        data.cell.styles.textColor = [17, 24, 39];
+      }
+    },
+  });
+
+  y = ((pdf as any).lastAutoTable?.finalY || y) + 8;
+  y = ensureRoom(y, 34);
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(9);
+  pdf.text('Amount in Words:', margin, y);
+  pdf.setFont('helvetica', 'normal');
+  y = addWrapped(numberToWords(docData.netTotal, settings.currency), margin + 32, y, usableWidth - 32);
+
+  const infoBlocks = [
+    (settings.bankName || settings.bankAccountNumber) ? ['Bank Details', [settings.bankName ? `Bank: ${settings.bankName}` : '', settings.bankAccountNumber ? `Account No: ${settings.bankAccountNumber}` : ''].filter(Boolean).join('\n')] : null,
+    docData.notes ? ['Notes', docData.notes] : null,
+    docData.terms ? ['Terms & Conditions', docData.terms] : null,
+  ].filter(Boolean) as [string, string][];
+
+  for (const [title, content] of infoBlocks) {
+    y = ensureRoom(y + 6, 24);
+    sectionTitle(title, y);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(9);
+    y = addWrapped(content, margin, y + 6, usableWidth);
+  }
+
+  y = ensureRoom(y + 12, 34);
+  const sigX = pageWidth - margin - 52;
+  if (settings.signature) {
+    try {
+      pdf.addImage(settings.signature, 'PNG', sigX + 8, y, 36, 14, undefined, 'FAST');
+    } catch {
+      try {
+        pdf.addImage(settings.signature, 'JPEG', sigX + 8, y, 36, 14, undefined, 'FAST');
+      } catch {
+        // Signature is optional; the signature line remains.
+      }
+    }
+  }
+  pdf.setDrawColor(156, 163, 175);
+  pdf.line(sigX, y + 19, sigX + 52, y + 19);
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(9);
+  pdf.text('Authorized Signature', sigX + 26, y + 24, { align: 'center' });
+
+  if (isProjectInvoice && projectSummary) {
+    pdf.addPage();
+    addHeader();
+    y = 45;
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(15);
+    pdf.setTextColor(17, 24, 39);
+    pdf.text('Project Summary', margin, y);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(9);
+    pdf.setTextColor(75, 85, 99);
+    pdf.text(`${clean(invoice?.projectName || invoice?.projectId || 'Project')} - ${clean(docData.number)}`, margin, y + 6);
+    autoTable(pdf, {
+      startY: y + 14,
+      body: [
+        ['Project Total Value', pdfMoney(projectSummary.projectTotalValue)],
+        ['Previously Invoiced', `${formatPct(projectSummary.previousPercentage)} (${pdfMoney(projectSummary.previousAmount)})`],
+        ['Current Invoice', `${formatPct(projectSummary.currentPercentage)} (${pdfMoney(projectSummary.currentAmount)})`],
+        ['Total Invoiced', `${formatPct(projectSummary.totalInvoicedPercentage)} (${pdfMoney(projectSummary.totalInvoicedAmount)})`],
+        ['Remaining', `${formatPct(projectSummary.remainingPercentage)} (${pdfMoney(projectSummary.remainingAmount)})`],
+      ],
+      theme: 'grid',
+      margin: { left: margin, right: margin },
+      styles: { font: 'helvetica', fontSize: 10, cellPadding: 3, lineColor: [229, 231, 235], lineWidth: 0.15 },
+      columnStyles: { 0: { fontStyle: 'bold', fillColor: [248, 250, 252], cellWidth: 58 }, 1: { cellWidth: usableWidth - 58, halign: 'right' } },
+    });
+  }
+
+  const pageCount = pdf.getNumberOfPages();
+  for (let page = 1; page <= pageCount; page += 1) {
+    pdf.setPage(page);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(8);
+    pdf.setTextColor(156, 163, 175);
+    pdf.text('Thank you for your business!', margin, pageHeight - 8);
+    pdf.text(`Page ${page} of ${pageCount}`, pageWidth - margin, pageHeight - 8, { align: 'right' });
+  }
+
+  return pdf.output('blob');
+
   const html = `
       <style>
         * { 
@@ -342,6 +612,27 @@ export async function generatePDFBlob({ type, document: docData, client, setting
         .col-amount { width: 100px; }
         
         /* Summary Grid */
+        .project-summary-page {
+          break-before: page;
+          page-break-before: always;
+          page-break-inside: avoid;
+          break-inside: avoid;
+          padding-top: 20px;
+        }
+
+        .project-summary-title {
+          font-size: 18px;
+          font-weight: 700;
+          color: #111827;
+          margin-bottom: 4px;
+        }
+
+        .project-summary-subtitle {
+          font-size: 11px;
+          color: #6b7280;
+          margin-bottom: 16px;
+        }
+
         .summary-grid {
           display: grid;
           grid-template-columns: repeat(2, 1fr);
@@ -506,6 +797,11 @@ export async function generatePDFBlob({ type, document: docData, client, setting
           .items-table tr {
             page-break-inside: avoid;
           }
+          .project-summary-page {
+            break-before: page;
+            page-break-before: always;
+            page-break-inside: avoid;
+          }
         }
         
         /* Compact spacing for many items */
@@ -525,7 +821,7 @@ export async function generatePDFBlob({ type, document: docData, client, setting
                 ${settings.email ? `${escapeHtml(settings.email)}<br>` : ''}
                 ${settings.phone ? `${escapeHtml(settings.phone)}${settings.address ? ' • ' : '<br>'}` : ''}
                 ${settings.address ? `${escapeHtml(settings.address)}<br>` : ''}
-                ${settings.taxNumber ? `GST: ${escapeHtml(settings.taxNumber)}` : ''}
+                ${settings.taxNumber ? `VAT: ${escapeHtml(settings.taxNumber)}` : ''}
               </div>
             </div>
           </div>
@@ -548,11 +844,11 @@ export async function generatePDFBlob({ type, document: docData, client, setting
               ${client?.address ? escapeHtml(client.address) : ''}
             </div>
           </div>
-          ${!isProjectInvoice && settings.taxNumber ? `
+          ${settings.taxNumber ? `
           <div class="party-section">
-            <h3>GST Details</h3>
+            <h3>VAT Details</h3>
             <div class="party-details">
-              ${settings.taxNumber ? `GSTIN: ${escapeHtml(settings.taxNumber)}` : ''}
+              ${settings.taxNumber ? `VAT No: ${escapeHtml(settings.taxNumber)}` : ''}
             </div>
           </div>
           ` : ''}
@@ -616,7 +912,7 @@ export async function generatePDFBlob({ type, document: docData, client, setting
               <span>${formatMoney(subtotal)}</span>
             </div>
             ${discountAmount > 0 ? `<div class="total-row"><span>Discount</span><span>-${formatMoney(discountAmount)}</span></div>` : ''}
-            ${!isProjectInvoice && vatTotal > 0 ? `<div class="total-row"><span>VAT</span><span>${formatMoney(vatTotal)}</span></div>` : ''}
+            ${vatTotal > 0 ? `<div class="total-row"><span>VAT</span><span>${formatMoney(vatTotal)}</span></div>` : ''}
             <div class="total-row grand">
               <span>Grand Total</span>
               <span>${formatMoney(docData.netTotal)}</span>
@@ -629,20 +925,6 @@ export async function generatePDFBlob({ type, document: docData, client, setting
           <p><strong>Amount in Words:</strong> ${numberToWords(docData.netTotal, settings.currency)}</p>
         </div>
 
-                ${isProjectInvoice && projectSummary ? `
-        <div class="summary-grid">
-          <div class="summary-row"><span>Project Total Value</span><strong>${formatMoney(projectSummary.projectTotalValue)}</strong></div>
-          <div class="summary-row"><span>Previously Invoiced</span><strong>${formatPct(projectSummary.previousPercentage)} (${formatMoney(projectSummary.previousAmount)})</strong></div>
-          <div class="summary-row"><span>Current Invoice</span><strong>${formatPct(projectSummary.currentPercentage)} (${formatMoney(projectSummary.currentAmount)})</strong></div>
-          <div class="summary-row"><span>Total Invoiced</span><strong>${formatPct(projectSummary.totalInvoicedPercentage)} (${formatMoney(projectSummary.totalInvoicedAmount)})</strong></div>
-          <div class="summary-row"><span>Remaining</span><strong>${formatPct(projectSummary.remainingPercentage)} (${formatMoney(projectSummary.remainingAmount)})</strong></div>
-          <div class="progress-wrap">
-            <div class="summary-row" style="margin-bottom: 6px;"><span>Progress</span><strong>${formatPct(projectSummary.totalInvoicedPercentage)}</strong></div>
-            <div class="progress-track"><div class="progress-fill" style="width: ${Math.min(100, Math.max(0, projectSummary.totalInvoicedPercentage))}%;"></div></div>
-          </div>
-        </div>
-        ` : ''}
-        
         ${(settings.bankName || settings.bankAccountNumber) ? `
         <div class="notes-section">
           <h4>Bank Details</h4>
@@ -677,6 +959,24 @@ export async function generatePDFBlob({ type, document: docData, client, setting
         <div class="footer">
           Thank you for your business!
         </div>
+
+        ${isProjectInvoice && projectSummary ? `
+        <section class="project-summary-page">
+          <div class="project-summary-title">Project Summary</div>
+          <div class="project-summary-subtitle">${escapeHtml(invoice?.projectName || invoice?.projectId || 'Project')} • ${escapeHtml(docData.number)}</div>
+          <div class="summary-grid">
+            <div class="summary-row"><span>Project Total Value</span><strong>${formatMoney(projectSummary.projectTotalValue)}</strong></div>
+            <div class="summary-row"><span>Previously Invoiced</span><strong>${formatPct(projectSummary.previousPercentage)} (${formatMoney(projectSummary.previousAmount)})</strong></div>
+            <div class="summary-row"><span>Current Invoice</span><strong>${formatPct(projectSummary.currentPercentage)} (${formatMoney(projectSummary.currentAmount)})</strong></div>
+            <div class="summary-row"><span>Total Invoiced</span><strong>${formatPct(projectSummary.totalInvoicedPercentage)} (${formatMoney(projectSummary.totalInvoicedAmount)})</strong></div>
+            <div class="summary-row"><span>Remaining</span><strong>${formatPct(projectSummary.remainingPercentage)} (${formatMoney(projectSummary.remainingAmount)})</strong></div>
+            <div class="progress-wrap">
+              <div class="summary-row" style="margin-bottom: 6px;"><span>Progress</span><strong>${formatPct(projectSummary.totalInvoicedPercentage)}</strong></div>
+              <div class="progress-track"><div class="progress-fill" style="width: ${Math.min(100, Math.max(0, projectSummary.totalInvoicedPercentage))}%;"></div></div>
+            </div>
+          </div>
+        </section>
+        ` : ''}
       </div>
   `;
 
