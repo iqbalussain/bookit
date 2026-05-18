@@ -5,7 +5,6 @@ import { MobileBottomNav } from '@/components/layout/MobileBottomNav';
 import { FloatingActionButton } from '@/components/layout/FloatingActionButton';
 import { Button } from '@/components/ui/button';
 import { useTheme } from 'next-themes';
-import { useAuth } from '@/contexts/AuthContext';
 import {
   LayoutDashboard,
   FileText,
@@ -21,8 +20,6 @@ import {
   Sun,
   Moon,
   ArrowRight,
-  Briefcase,
-  LogOut,
 } from 'lucide-react';
 
 interface AppLayoutProps {
@@ -31,7 +28,6 @@ interface AppLayoutProps {
 
 const navItems = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-  { name: 'Projects', href: '/projects', icon: Briefcase },
   { name: 'Quotations', href: '/quotations', icon: FileText },
   { name: 'Sales', href: '/invoices', icon: Receipt },
   { name: 'Purchases', href: '/purchases', icon: ShoppingCart },
@@ -56,7 +52,6 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [reportsOpen, setReportsOpen] = useState(location.pathname.startsWith('/reports'));
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  const { signOut, user } = useAuth();
 
   useEffect(() => {
     setMounted(true);
@@ -95,7 +90,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               <Receipt className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">MITC OS</p>
+              <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">Bit2book OS</p>
               <p className="text-lg font-semibold tracking-tight">Business HQ</p>
             </div>
           </Link>
@@ -207,9 +202,6 @@ export function AppLayout({ children }: AppLayoutProps) {
                   <Link to="/invoices/new" className="flex items-center gap-2">
                     <Receipt className="h-4 w-4" /> New Invoice
                   </Link>
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => signOut()} title={user?.email ?? 'Sign out'}>
-                  <LogOut className="h-4 w-4" />
                 </Button>
               </div>
             </div>

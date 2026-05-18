@@ -1,6 +1,6 @@
 {
-  "appId": "com.MITC.app",
-  "productName": "MITC",
+  "appId": "com.Bit2book.app",
+  "productName": "Bit2book",
 
   "directories": {
     "buildResources": "public",

@@ -6,12 +6,10 @@ import { useState, useEffect, useCallback } from 'react';
  * to the toast system directly.
  */
 function dispatchStorageError(key: string, isQuota: boolean) {
-  if (typeof window === 'undefined') return;
-
   const message = isQuota
     ? `Storage is full — could not save "${key}". Please export a backup to free up space.`
     : `Could not save data for "${key}". Check your browser's storage permissions.`;
-  window.dispatchEvent(new CustomEvent('MITC:storage-error', { detail: { key, isQuota, message } }));
+  window.dispatchEvent(new CustomEvent('Bit2book:storage-error', { detail: { key, isQuota, message } }));
 }
 
 export function useLocalStorage<T>(
@@ -33,31 +31,26 @@ export function useLocalStorage<T>(
 
   const setValue = useCallback(
     (value: T | ((prev: T) => T)) => {
-      setStoredValue((prev) => {
-        try {
+      try {
+        setStoredValue((prev) => {
           const newValue = value instanceof Function ? value(prev) : value;
-          if (typeof window !== 'undefined') {
-            window.localStorage.setItem(key, JSON.stringify(newValue));
-          }
+          window.localStorage.setItem(key, JSON.stringify(newValue));
           return newValue;
-        } catch (error) {
-          console.error(`[localStorage] Error writing key "${key}":`, error);
-          const isQuota =
-            error instanceof DOMException &&
-            (error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED');
-          dispatchStorageError(key, isQuota);
-          return prev;
-        }
-      });
+        });
+      } catch (error) {
+        console.error(`[localStorage] Error writing key "${key}":`, error);
+        const isQuota =
+          error instanceof DOMException &&
+          (error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED');
+        dispatchStorageError(key, isQuota);
+      }
     },
     [key],
   );
 
-  // Re-read only when the storage key changes (not when initialValue identity changes).
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     setStoredValue(readValue());
-  }, [key]);
+  }, [readValue]);
 
   return [storedValue, setValue];
 }
