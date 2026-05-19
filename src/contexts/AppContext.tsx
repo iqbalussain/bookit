@@ -610,6 +610,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
       value: voucher.amount,
     });
   };
+  const updateVoucher = (voucher: Voucher) => {
+    setVouchers((prev) => prev.map((v) => (v.id === voucher.id ? voucher : v)));
+    addAuditEntry({
+      type: 'voucher', action: 'updated',
+      target: voucher.number,
+      details: `Voucher updated for ${voucher.partyName}`,
+      value: voucher.amount,
+    });
+  };
+  const deleteVoucher = (id: string) => {
+    const existing = vouchers.find((v) => v.id === id);
+    if (!existing) return;
+    setVouchers((prev) => prev.filter((v) => v.id !== id));
+    // Remove all journal entries linked by this voucher id (any referenceType)
+    setJournalEntries((prev) => prev.filter((e) => e.referenceId !== id));
+    addAuditEntry({
+      type: 'voucher', action: 'deleted',
+      target: existing.number,
+      details: 'Voucher deleted and journal reversed',
+      value: existing.amount,
+    });
+  };
   const generateVoucherNumber = (type: string) => {
     const prefix = type.toUpperCase().replace(/_/g, '-');
     const year = new Date().getFullYear();
@@ -997,10 +1019,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         quotations, setQuotations, addQuotation, updateQuotation, deleteQuotation, getQuotation,
         invoices, setInvoices, addInvoice, updateInvoice, deleteInvoice, getInvoice,
         purchaseInvoices, setPurchaseInvoices, addPurchaseInvoice, updatePurchaseInvoice, deletePurchaseInvoice, getPurchaseInvoice, generatePurchaseInvoiceNumber,
-        payments, addPayment, getPaymentsByInvoice, getPaymentsByClient, calculateInvoicePaymentStatus,
+        payments, addPayment, updatePayment, deletePayment, getPaymentsByInvoice, getPaymentsByClient, calculateInvoicePaymentStatus,
         accounts, setAccounts, addAccount, deleteAccount,
         journalEntries, accountBalances, createJournalEntry, postJournalForReference, postTransactionEntry, reverseJournalForReference, postSalesInvoice, repostSalesInvoice, reconcileJournalBalances, getAccountBalance,
-        vouchers, addVoucher, generateVoucherNumber,
+        vouchers, addVoucher, updateVoucher, deleteVoucher, generateVoucherNumber,
         addJournalVoucher,
         items, addItem, updateItem, deleteItem, getItem, adjustItemStock,
         salesmen, addSalesman, getSalesman,
