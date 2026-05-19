@@ -10,20 +10,25 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { currencySymbols, type Payment, type PaymentMethod } from '@/types';
-import { ArrowDownLeft, ArrowUpRight, Save, CreditCard, Banknote, Building2, Globe } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Save, Edit, Trash2, X } from 'lucide-react';
 
 export default function PaymentsReceipts() {
   const { toast } = useToast();
   const {
     clients, invoices, purchaseInvoices, payments,
-    addPayment, updateInvoice, updatePurchaseInvoice,
+    addPayment, updatePayment, deletePayment, updateInvoice, updatePurchaseInvoice,
     getClient, settings, postTransactionEntry, calculateInvoicePaymentStatus,
   } = useApp();
 
   const currencySymbol = currencySymbols[settings.currency];
   const [mode, setMode] = useState<'receipt' | 'payment'>('receipt');
+  const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
   const [partyId, setPartyId] = useState('');
   const [selectedInvoiceId, setSelectedInvoiceId] = useState('');
   const [amount, setAmount] = useState(0);
@@ -64,6 +69,29 @@ export default function PaymentsReceipts() {
 
   const resetForm = () => {
     setPartyId(''); setSelectedInvoiceId(''); setAmount(0); setMethod('bank'); setReference(''); setNotes('');
+    setEditingPaymentId(null); setDate(new Date().toISOString().split('T')[0]);
+  };
+
+  const loadForEdit = (p: Payment) => {
+    setMode(p.invoiceType === 'sales' ? 'receipt' : 'payment');
+    setEditingPaymentId(p.id);
+    const invoice = p.invoiceType === 'sales'
+      ? invoices.find((i) => i.id === p.invoiceId)
+      : purchaseInvoices.find((pi) => pi.id === p.invoiceId);
+    setPartyId((invoice as any)?.clientId || (invoice as any)?.vendorId || '');
+    setSelectedInvoiceId(p.invoiceId);
+    setAmount(p.amount);
+    setMethod(p.method);
+    setReference(p.reference || '');
+    setDate(p.date);
+    setNotes(p.notes || '');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleDelete = (p: Payment) => {
+    deletePayment(p.id);
+    toast({ title: 'Deleted', description: `${p.invoiceType === 'sales' ? 'Receipt' : 'Payment'} of ${currencySymbol}${p.amount.toLocaleString('en-IN')} removed.` });
+    if (editingPaymentId === p.id) resetForm();
   };
 
   const handleSave = () => {
@@ -71,12 +99,37 @@ export default function PaymentsReceipts() {
       toast({ title: 'Error', description: 'Please fill all required fields', variant: 'destructive' });
       return;
     }
-    if (selectedInvoice && amount > selectedInvoice.balance) {
+    const maxAllowed = editingPaymentId
+      ? (selectedInvoice?.balance ?? 0) + (payments.find((p) => p.id === editingPaymentId)?.amount ?? 0)
+      : (selectedInvoice?.balance ?? 0);
+    if (selectedInvoice && amount > maxAllowed) {
       toast({ title: 'Error', description: 'Amount cannot exceed balance', variant: 'destructive' });
       return;
     }
 
     const now = new Date().toISOString();
+
+    if (editingPaymentId) {
+      const existing = payments.find((p) => p.id === editingPaymentId);
+      if (!existing) return;
+      updatePayment({
+        ...existing,
+        invoiceId: selectedInvoiceId,
+        amount, date, method, reference, notes,
+      });
+      // Re-evaluate parent invoice status
+      if (mode === 'receipt') {
+        const inv = invoices.find((i) => i.id === selectedInvoiceId);
+        if (inv) {
+          const status = calculateInvoicePaymentStatus(selectedInvoiceId);
+          updateInvoice({ ...inv, status: status as any, updatedAt: now });
+        }
+      }
+      toast({ title: 'Updated', description: `${currencySymbol}${amount.toLocaleString('en-IN')} updated.` });
+      resetForm();
+      return;
+    }
+
     const payment: Payment = {
       id: crypto.randomUUID(), invoiceId: selectedInvoiceId,
       invoiceType: mode === 'receipt' ? 'sales' : 'purchase',
@@ -134,6 +187,25 @@ export default function PaymentsReceipts() {
     resetForm();
   };
 
+  const historyItems = useMemo(() => {
+    return payments
+      .filter((p) => (mode === 'receipt' ? p.invoiceType === 'sales' : p.invoiceType === 'purchase'))
+      .sort((a, b) => (b.date + b.createdAt).localeCompare(a.date + a.createdAt));
+  }, [payments, mode]);
+
+  const lookupInvoiceNumber = (p: Payment) => {
+    if (p.invoiceType === 'sales') return invoices.find((i) => i.id === p.invoiceId)?.number || '—';
+    return purchaseInvoices.find((pi) => pi.id === p.invoiceId)?.number || '—';
+  };
+  const lookupPartyName = (p: Payment) => {
+    if (p.invoiceType === 'sales') {
+      const inv = invoices.find((i) => i.id === p.invoiceId);
+      return inv ? getClient(inv.clientId)?.name : '—';
+    }
+    const pi = purchaseInvoices.find((x) => x.id === p.invoiceId);
+    return pi ? getClient(pi.vendorId)?.name : '—';
+  };
+
   return (
     <div className="space-y-3 pb-20 lg:pb-4 max-w-lg mx-auto">
       <div>
@@ -153,7 +225,16 @@ export default function PaymentsReceipts() {
       </Tabs>
 
       <Card>
-        <CardHeader className="py-2.5 px-3"><CardTitle className="text-sm">{mode === 'receipt' ? 'Receive Payment' : 'Make Payment'}</CardTitle></CardHeader>
+        <CardHeader className="py-2.5 px-3 flex flex-row items-center justify-between">
+          <CardTitle className="text-sm">
+            {editingPaymentId ? 'Edit ' : ''}{mode === 'receipt' ? 'Receive Payment' : 'Make Payment'}
+          </CardTitle>
+          {editingPaymentId && (
+            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={resetForm}>
+              <X className="h-3.5 w-3.5 mr-1" />Cancel edit
+            </Button>
+          )}
+        </CardHeader>
         <CardContent className="px-3 pb-3 space-y-3">
           <div className="space-y-1.5">
             <Label className="text-xs">{mode === 'receipt' ? 'Customer' : 'Vendor'} *</Label>
