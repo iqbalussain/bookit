@@ -416,7 +416,7 @@ export default function InvoiceForm() {
               </Button>
             )}
           </div>
-          {currentStatus === 'draft' && (
+          {currentStatus !== 'cancelled' && (
             <Button onClick={handleSave} variant="outline" size="sm" className="h-9">
               <Save className="mr-1.5 h-4 w-4" />Save {isEditing ? 'Changes' : 'Draft'}
             </Button>

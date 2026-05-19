@@ -52,6 +52,8 @@ interface AppContextType {
   // Payments
   payments: Payment[];
   addPayment: (payment: Payment) => void;
+  updatePayment: (payment: Payment) => void;
+  deletePayment: (id: string) => void;
   getPaymentsByInvoice: (invoiceId: string) => Payment[];
   getPaymentsByClient: (clientId: string) => Payment[];
   calculateInvoicePaymentStatus: (invoiceId: string) => Extract<InvoiceStatus, 'sent' | 'partial' | 'paid'>;
@@ -64,6 +66,8 @@ interface AppContextType {
   // Vouchers
   vouchers: Voucher[];
   addVoucher: (voucher: Voucher) => void;
+  updateVoucher: (voucher: Voucher) => void;
+  deleteVoucher: (id: string) => void;
   generateVoucherNumber: (type: string) => string;
   addJournalVoucher: (voucher: Voucher, lines: JournalLine[]) => void;
 
@@ -157,7 +161,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [payments, setPayments] = useRemoteCollection<Payment>('payments', companyKey('payments'), []);
   const [accounts, setAccounts] = useRemoteCollection<Account>('accounts', companyKey('accounts'), DEFAULT_ACCOUNTS);
   const [journalEntries, setJournalEntries] = useRemoteCollection<JournalEntry>('journalEntries', companyKey('journal_entries'), []);
-  const [accountBalances, setAccountBalances] = useRemoteCollection<AccountBalanceStore>('accountBalances', companyKey('account_balances'), {});
+  const [accountBalances, setAccountBalances] = useLocalStorage<AccountBalanceStore>(companyKey('account_balances'), {});
   const [vouchers, setVouchers] = useRemoteCollection<Voucher>('vouchers', companyKey('vouchers'), []);
   const [items, setItems] = useRemoteCollection<Item>('items', companyKey('items'), []);
   const [salesmen, setSalesmen] = useRemoteCollection<Salesman>('salesmen', companyKey('salesmen'), []);
@@ -381,6 +385,84 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return payments.filter((p) => clientInvoiceIds.includes(p.invoiceId) || clientPurchaseIds.includes(p.invoiceId));
   };
 
+  const removeJournalByReference = (
+    referenceType: JournalEntry['referenceType'],
+    referenceId: string,
+  ) => {
+    setJournalEntries((prev) =>
+      prev.filter((e) => !(e.referenceType === referenceType && e.referenceId === referenceId)),
+    );
+  };
+
+  const refreshInvoiceStatusAfterPayment = (payment: Payment, removedAmount: number) => {
+    if (payment.invoiceType === 'sales') {
+      const inv = invoices.find((i) => i.id === payment.invoiceId);
+      if (!inv) return;
+      const remainingPaid = payments
+        .filter((p) => p.invoiceId === inv.id && p.id !== payment.id)
+        .reduce((s, p) => s + p.amount, 0) - removedAmount;
+      const totalPaid = Math.max(0, remainingPaid + payment.amount); // already adjusted by caller
+      const status: InvoiceStatus =
+        totalPaid <= 0 ? 'sent' : totalPaid < inv.netTotal ? 'partial' : 'paid';
+      setInvoices((prev) => prev.map((i) => (i.id === inv.id ? { ...i, status, updatedAt: new Date().toISOString() } : i)));
+    } else {
+      const pi = purchaseInvoices.find((p) => p.id === payment.invoiceId);
+      if (!pi) return;
+      const remainingPaid = payments
+        .filter((p) => p.invoiceId === pi.id && p.id !== payment.id)
+        .reduce((s, p) => s + p.amount, 0) - removedAmount;
+      const totalPaid = Math.max(0, remainingPaid + payment.amount);
+      const status = totalPaid <= 0 ? 'sent' : totalPaid < pi.netTotal ? 'partial' : 'paid';
+      setPurchaseInvoices((prev) => prev.map((p) => (p.id === pi.id ? { ...p, status: status as any, updatedAt: new Date().toISOString() } : p)));
+    }
+  };
+
+  const updatePayment = (payment: Payment) => {
+    setPayments((prev) => prev.map((p) => (p.id === payment.id ? payment : p)));
+    addAuditEntry({
+      type: 'payment', action: 'updated',
+      target: payment.reference || payment.invoiceId,
+      details: `Payment updated (${payment.method})`,
+      value: payment.amount,
+    });
+  };
+
+  const deletePayment = (id: string) => {
+    const existing = payments.find((p) => p.id === id);
+    if (!existing) return;
+    setPayments((prev) => prev.filter((p) => p.id !== id));
+    // Remove linked journal entries
+    const refType: JournalEntry['referenceType'] = existing.invoiceType === 'sales' ? 'receipt' : 'payment';
+    removeJournalByReference(refType, existing.id);
+    // Recompute parent invoice status
+    if (existing.invoiceType === 'sales') {
+      const inv = invoices.find((i) => i.id === existing.invoiceId);
+      if (inv) {
+        const remaining = payments
+          .filter((p) => p.invoiceId === inv.id && p.id !== id)
+          .reduce((s, p) => s + p.amount, 0);
+        const status: InvoiceStatus =
+          remaining <= 0 ? 'sent' : remaining < inv.netTotal ? 'partial' : 'paid';
+        setInvoices((prev) => prev.map((i) => (i.id === inv.id ? { ...i, status, updatedAt: new Date().toISOString() } : i)));
+      }
+    } else {
+      const pi = purchaseInvoices.find((p) => p.id === existing.invoiceId);
+      if (pi) {
+        const remaining = payments
+          .filter((p) => p.invoiceId === pi.id && p.id !== id)
+          .reduce((s, p) => s + p.amount, 0);
+        const status = remaining <= 0 ? 'sent' : remaining < pi.netTotal ? 'partial' : 'paid';
+        setPurchaseInvoices((prev) => prev.map((p) => (p.id === pi.id ? { ...p, status: status as any, updatedAt: new Date().toISOString() } : p)));
+      }
+    }
+    addAuditEntry({
+      type: 'payment', action: 'deleted',
+      target: existing.reference || existing.invoiceId,
+      details: 'Payment deleted and journal reversed',
+      value: existing.amount,
+    });
+  };
+
   // Account operations
   const addAccount = (account: Account) => {
     if (!account.kind) {
@@ -526,6 +608,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
       target: voucher.number,
       details: `Voucher created for ${voucher.partyName}`,
       value: voucher.amount,
+    });
+  };
+  const updateVoucher = (voucher: Voucher) => {
+    setVouchers((prev) => prev.map((v) => (v.id === voucher.id ? voucher : v)));
+    addAuditEntry({
+      type: 'voucher', action: 'updated',
+      target: voucher.number,
+      details: `Voucher updated for ${voucher.partyName}`,
+      value: voucher.amount,
+    });
+  };
+  const deleteVoucher = (id: string) => {
+    const existing = vouchers.find((v) => v.id === id);
+    if (!existing) return;
+    setVouchers((prev) => prev.filter((v) => v.id !== id));
+    // Remove all journal entries linked by this voucher id (any referenceType)
+    setJournalEntries((prev) => prev.filter((e) => e.referenceId !== id));
+    addAuditEntry({
+      type: 'voucher', action: 'deleted',
+      target: existing.number,
+      details: 'Voucher deleted and journal reversed',
+      value: existing.amount,
     });
   };
   const generateVoucherNumber = (type: string) => {
@@ -915,10 +1019,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         quotations, setQuotations, addQuotation, updateQuotation, deleteQuotation, getQuotation,
         invoices, setInvoices, addInvoice, updateInvoice, deleteInvoice, getInvoice,
         purchaseInvoices, setPurchaseInvoices, addPurchaseInvoice, updatePurchaseInvoice, deletePurchaseInvoice, getPurchaseInvoice, generatePurchaseInvoiceNumber,
-        payments, addPayment, getPaymentsByInvoice, getPaymentsByClient, calculateInvoicePaymentStatus,
+        payments, addPayment, updatePayment, deletePayment, getPaymentsByInvoice, getPaymentsByClient, calculateInvoicePaymentStatus,
         accounts, setAccounts, addAccount, deleteAccount,
         journalEntries, accountBalances, createJournalEntry, postJournalForReference, postTransactionEntry, reverseJournalForReference, postSalesInvoice, repostSalesInvoice, reconcileJournalBalances, getAccountBalance,
-        vouchers, addVoucher, generateVoucherNumber,
+        vouchers, addVoucher, updateVoucher, deleteVoucher, generateVoucherNumber,
         addJournalVoucher,
         items, addItem, updateItem, deleteItem, getItem, adjustItemStock,
         salesmen, addSalesman, getSalesman,
