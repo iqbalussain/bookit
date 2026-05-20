@@ -70,6 +70,7 @@ export default function InvoiceForm() {
     postSalesInvoice, repostSalesInvoice, adjustItemStock, calculateInvoicePaymentStatus,
     salesmen, addSalesman,
     projects,
+    generateInvoiceNumber,
   } = useApp();
 
   const isEditing = id && id !== 'new';
@@ -95,6 +96,7 @@ export default function InvoiceForm() {
   const defaultCustomNum = isEditing && initialInvNumParts.length > 1 ? initialInvNumParts[1] : '';
 
   const [invoiceNumberPart, setInvoiceNumberPart] = useState(defaultCustomNum);
+  const [normalInvoiceNumber, setNormalInvoiceNumber] = useState(existingInvoice?.number || generateInvoiceNumber());
   const [clientId, setClientId] = useState(existingInvoice?.clientId || sourceQuotation?.clientId || '');
   const [salesmanId, setSalesmanId] = useState<string>(existingInvoice?.salesmanId || sourceQuotation?.salesmanId || '');
   const [dueDate, setDueDate] = useState(existingInvoice?.dueDate || defaultDueDate.toISOString().split('T')[0]);
@@ -225,6 +227,9 @@ export default function InvoiceForm() {
   const handleInvoiceTypeChange = (value: InvoiceType) => {
     setInvoiceType(value);
     setItems(value === 'project' ? [createProjectItem()] : [createNormalItem()]);
+    if (value === 'normal' && !normalInvoiceNumber.trim()) {
+      setNormalInvoiceNumber(generateInvoiceNumber());
+    }
   };
 
   const updateNormalItem = (index: number, field: keyof LineItem, value: string | number | boolean) => {
@@ -353,6 +358,13 @@ export default function InvoiceForm() {
 
   const validateInvoice = () => {
     if (invoiceType === 'project' && !invoiceNumberPart) return 'Please provide an invoice number sequence';
+    if (invoiceType === 'normal' && !normalInvoiceNumber.trim()) return 'Please provide an invoice number';
+    const invoiceNumber = invoiceType === 'project' ? `${mitcPrefix}${invoiceNumberPart.trim()}` : normalInvoiceNumber.trim();
+    const duplicateInvoice = invoices.find((invoice) =>
+      invoice.id !== existingInvoice?.id &&
+      invoice.number.trim().toLowerCase() === invoiceNumber.toLowerCase()
+    );
+    if (duplicateInvoice) return 'An invoice with this number already exists';
     if (!clientId) return 'Please select a client';
     if (!salesmanId) return 'Please select a salesman';
     if (invoiceType === 'project') {
@@ -369,7 +381,7 @@ export default function InvoiceForm() {
   const buildInvoicePayload = (now: string, base?: Invoice): Invoice => ({
     ...(base || {}),
     id: base?.id || safeRandomUUID(),
-    number: invoiceType === 'project' ? `${mitcPrefix}${invoiceNumberPart}` : (base?.number || `INV-${Date.now().toString().slice(-4)}`),
+    number: invoiceType === 'project' ? `${mitcPrefix}${invoiceNumberPart.trim()}` : normalInvoiceNumber.trim(),
     clientId,
     quotationId: sourceQuotation?.id || base?.quotationId,
     invoiceType,
@@ -555,7 +567,19 @@ export default function InvoiceForm() {
               </div>
             )}
 
-            <div className={`space-y-1.5 ${invoiceType !== 'project' ? 'sm:col-span-2' : ''}`}>
+            {invoiceType === 'normal' && (
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-muted-foreground uppercase">Invoice Number</Label>
+                <Input
+                  value={normalInvoiceNumber}
+                  onChange={(e) => setNormalInvoiceNumber(e.target.value)}
+                  placeholder="INV-0001"
+                  className="h-9"
+                />
+              </div>
+            )}
+
+            <div className="space-y-1.5">
               <Label className="text-xs font-semibold text-muted-foreground uppercase">Client</Label>
               <div className="flex gap-1.5">
                 <Select value={clientId} onValueChange={setClientId} disabled={invoiceType === 'project'}>
