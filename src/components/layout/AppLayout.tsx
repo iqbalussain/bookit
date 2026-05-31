@@ -18,6 +18,7 @@ import {
   Sun,
   Moon,
   ArrowRight,
+  Building2,
 } from 'lucide-react';
 
 interface AppLayoutProps {
@@ -28,6 +29,7 @@ const navItems = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Quotations', href: '/quotations', icon: FileText },
   { name: 'Sales', href: '/invoices', icon: Receipt },
+  { name: 'Projects', href: '/projects', icon: Building2 },
   { name: 'Purchases', href: '/purchases', icon: ShoppingCart },
   { name: 'Vouchers', href: '/vouchers', icon: Wallet },
   { name: 'Parties', href: '/clients', icon: Users },

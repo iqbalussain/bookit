@@ -7,6 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -36,6 +38,7 @@ export default function InvoiceForm() {
     generateInvoiceNumber,
     postSalesInvoice, repostSalesInvoice, adjustItemStock, calculateInvoicePaymentStatus,
     salesmen, addSalesman,
+    projects,
   } = useApp();
 
   const isEditing = id && id !== 'new';
@@ -52,6 +55,9 @@ export default function InvoiceForm() {
   const [dueDate, setDueDate] = useState(existingInvoice?.dueDate || defaultDueDate.toISOString().split('T')[0]);
   const [notes, setNotes] = useState(existingInvoice?.notes || sourceQuotation?.notes || '');
   const [terms, setTerms] = useState(existingInvoice?.terms || sourceQuotation?.terms || 'Payment terms: Net 30 days');
+  const [invoiceType, setInvoiceType] = useState<'normal' | 'project'>(existingInvoice?.invoiceType || 'normal');
+  const [projectId, setProjectId] = useState(existingInvoice?.projectId || '');
+  const [projectInvoicePercentage, setProjectInvoicePercentage] = useState<number>(existingInvoice?.projectSummary?.currentPercentage || 0);
   const [items, setItems] = useState<LineItem[]>(
     existingInvoice?.items || sourceQuotation?.items || [{ id: crypto.randomUUID(), name: '', description: '', quantity: 1, rate: 0, total: 0 }]
   );
@@ -74,6 +80,48 @@ export default function InvoiceForm() {
     : existingInvoice?.status === 'cancelled'
     ? 'cancelled'
     : displayedStatus;
+
+  const selectedProject = useMemo(
+    () => projects.find((project) => project.id === projectId),
+    [projectId, projects],
+  );
+
+  useEffect(() => {
+    if (invoiceType === 'project' && selectedProject && !isEditing) {
+      setClientId(selectedProject.customerId);
+    }
+  }, [invoiceType, selectedProject, isEditing]);
+
+  const projectSummary = useMemo(() => {
+    if (invoiceType !== 'project' || !selectedProject) return undefined;
+
+    const previousProjectInvoices = invoices.filter(
+      (invoice) => invoice.invoiceType === 'project' && invoice.projectId === selectedProject.id && invoice.id !== existingInvoice?.id,
+    );
+
+    const previousAmount = previousProjectInvoices.reduce((sum, invoice) => sum + (invoice.netTotal || 0), 0);
+    const previousPercentage = previousProjectInvoices.reduce(
+      (sum, invoice) => sum + (invoice.projectSummary?.currentPercentage || 0),
+      0,
+    );
+
+    const currentAmount = grandTotal;
+    const currentPercentage = projectInvoicePercentage;
+    const totalInvoicedAmount = previousAmount + currentAmount;
+    const totalInvoicedPercentage = Math.min(100, previousPercentage + currentPercentage);
+
+    return {
+      projectTotalValue: selectedProject.totalValue,
+      previousPercentage,
+      previousAmount,
+      currentPercentage,
+      currentAmount,
+      totalInvoicedPercentage,
+      totalInvoicedAmount,
+      remainingPercentage: Math.max(0, 100 - totalInvoicedPercentage),
+      remainingAmount: Math.max(0, selectedProject.totalValue - totalInvoicedAmount),
+    };
+  }, [invoiceType, selectedProject, invoices, grandTotal, projectInvoicePercentage, existingInvoice?.id]);
 
   const updateItem = (index: number, field: keyof LineItem, value: string | number) => {
     setItems((prev) => {
@@ -153,6 +201,8 @@ export default function InvoiceForm() {
     if (!clientId) { toast({ title: 'Error', description: 'Please select a client', variant: 'destructive' }); return; }
     if (!salesmanId) { toast({ title: 'Error', description: 'Please select a salesman', variant: 'destructive' }); return; }
     if (items.some((item) => !item.name.trim())) { toast({ title: 'Error', description: 'All items must have a name', variant: 'destructive' }); return; }
+    if (invoiceType === 'project' && !projectId) { toast({ title: 'Error', description: 'Please select a project for project invoices', variant: 'destructive' }); return; }
+    if (invoiceType === 'project' && projectInvoicePercentage <= 0) { toast({ title: 'Error', description: 'Project billing percentage must be greater than 0', variant: 'destructive' }); return; }
 
     const now = new Date().toISOString();
 
@@ -166,6 +216,9 @@ export default function InvoiceForm() {
         notes,
         terms,
         salesmanId,
+        invoiceType,
+        projectId: invoiceType === 'project' ? projectId : undefined,
+        projectSummary: invoiceType === 'project' ? projectSummary : undefined,
         updatedAt: now,
       };
 
@@ -181,9 +234,22 @@ export default function InvoiceForm() {
       toast({ title: 'Invoice updated', description: `${existingInvoice.number} has been updated.` });
     } else {
       const newInvoice: Invoice = {
-        id: crypto.randomUUID(), number: generateInvoiceNumber(), clientId,
-          quotationId: sourceQuotation?.id, items, netTotal: grandTotal, status: 'draft', dueDate, notes, terms, salesmanId,
-          createdAt: now, updatedAt: now,
+        id: crypto.randomUUID(),
+        number: generateInvoiceNumber(),
+        clientId,
+        quotationId: sourceQuotation?.id,
+        invoiceType,
+        projectId: invoiceType === 'project' ? projectId : undefined,
+        projectSummary: invoiceType === 'project' ? projectSummary : undefined,
+        items,
+        netTotal: grandTotal,
+        status: 'draft',
+        dueDate,
+        notes,
+        terms,
+        salesmanId,
+        createdAt: now,
+        updatedAt: now,
       };
       addInvoice(newInvoice);
 
@@ -289,6 +355,50 @@ export default function InvoiceForm() {
       <Card>
         <CardHeader className="py-2.5 px-3"><CardTitle className="text-sm">Client & Details</CardTitle></CardHeader>
         <CardContent className="px-3 pb-3">
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Invoice Type</Label>
+              <RadioGroup value={invoiceType} onValueChange={(value) => {
+                setInvoiceType(value as 'normal' | 'project');
+                if (value !== 'project') {
+                  setProjectId('');
+                  setProjectInvoicePercentage(0);
+                }
+              }}>
+                <div className="flex flex-wrap gap-2">
+                  <label className="inline-flex items-center gap-2 rounded-2xl border px-3 py-2 cursor-pointer">
+                    <RadioGroupItem value="normal" />
+                    <span className="text-sm">Normal</span>
+                  </label>
+                  <label className="inline-flex items-center gap-2 rounded-2xl border px-3 py-2 cursor-pointer">
+                    <RadioGroupItem value="project" />
+                    <span className="text-sm">Project</span>
+                  </label>
+                </div>
+              </RadioGroup>
+            </div>
+
+            {invoiceType === 'project' && (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Project *</Label>
+                  <Select value={projectId} onValueChange={setProjectId}>
+                    <SelectTrigger className="flex-1 h-9"><SelectValue placeholder="Select project" /></SelectTrigger>
+                    <SelectContent>
+                      {projects.map((project) => (
+                        <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Project Billing %</Label>
+                  <Input type="number" min="0" max="100" value={projectInvoicePercentage} onChange={(e) => setProjectInvoicePercentage(Number(e.target.value) || 0)} className="h-9" />
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="space-y-1.5">
               <Label className="text-xs">Client *</Label>
@@ -327,6 +437,41 @@ export default function InvoiceForm() {
           </div>
         </CardContent>
       </Card>
+
+      {invoiceType === 'project' && selectedProject && projectSummary && (
+        <Card>
+          <CardHeader className="py-2.5 px-3"><CardTitle className="text-sm">Project Summary</CardTitle></CardHeader>
+          <CardContent className="px-3 pb-3 space-y-3">
+            <div className="grid gap-3 sm:grid-cols-5">
+              <div className="rounded-md border bg-muted/20 p-3">
+                <p className="text-[11px] uppercase text-muted-foreground">Project Value</p>
+                <p className="text-sm font-semibold">{currencySymbol}{projectSummary.projectTotalValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+              </div>
+              <div className="rounded-md border bg-muted/20 p-3">
+                <p className="text-[11px] uppercase text-muted-foreground">Previous</p>
+                <p className="text-sm font-semibold">{projectSummary.previousPercentage.toFixed(2)}%</p>
+                <p className="text-xs text-muted-foreground">{currencySymbol}{projectSummary.previousAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+              </div>
+              <div className="rounded-md border bg-muted/20 p-3">
+                <p className="text-[11px] uppercase text-muted-foreground">Current</p>
+                <p className="text-sm font-semibold">{projectSummary.currentPercentage.toFixed(2)}%</p>
+                <p className="text-xs text-muted-foreground">{currencySymbol}{projectSummary.currentAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+              </div>
+              <div className="rounded-md border bg-muted/20 p-3">
+                <p className="text-[11px] uppercase text-muted-foreground">Total Progress</p>
+                <p className="text-sm font-semibold">{projectSummary.totalInvoicedPercentage.toFixed(2)}%</p>
+                <p className="text-xs text-muted-foreground">{currencySymbol}{projectSummary.totalInvoicedAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+              </div>
+              <div className="rounded-md border bg-muted/20 p-3">
+                <p className="text-[11px] uppercase text-muted-foreground">Remaining</p>
+                <p className="text-sm font-semibold">{projectSummary.remainingPercentage.toFixed(2)}%</p>
+                <p className="text-xs text-muted-foreground">{currencySymbol}{projectSummary.remainingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+              </div>
+            </div>
+            <Progress value={Math.min(100, Math.max(0, projectSummary.totalInvoicedPercentage))} />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Items */}
       <Card>

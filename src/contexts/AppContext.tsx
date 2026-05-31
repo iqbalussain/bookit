@@ -1,7 +1,7 @@
 import React, { createContext, useContext, ReactNode, useEffect, useMemo } from 'react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useRemoteCollection } from '@/hooks/useRemoteCollection';
-import type { Client, Quotation, Invoice, PurchaseInvoice, BusinessSettings, Payment, Account, JournalEntry, JournalLine, Company, Voucher, VoucherType, AuditEntry, Item, InvoiceStatus } from '@/types';
+import type { Client, Quotation, Invoice, PurchaseInvoice, BusinessSettings, Payment, Account, JournalEntry, JournalLine, Company, Voucher, VoucherType, AuditEntry, Item, InvoiceStatus, Project, ProjectStatus } from '@/types';
 import { buildSalesInvoicePostingEntry, repostSalesInvoice as buildSalesInvoiceRepostEntries } from '@/lib/postingEngine';
 import {
   applyJournalLinesToBalances,
@@ -39,6 +39,14 @@ interface AppContextType {
   updateInvoice: (invoice: Invoice) => void;
   deleteInvoice: (id: string) => void;
   getInvoice: (id: string) => Invoice | undefined;
+
+  // Projects
+  projects: Project[];
+  setProjects: (projects: Project[] | ((prev: Project[]) => Project[])) => void;
+  addProject: (project: Project) => void;
+  updateProject: (project: Project) => void;
+  deleteProject: (id: string) => void;
+  getProject: (id: string) => Project | undefined;
 
   // Purchase Invoices
   purchaseInvoices: PurchaseInvoice[];
@@ -157,6 +165,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [clients, setClients] = useRemoteCollection<Client>('clients', companyKey('clients'), []);
   const [quotations, setQuotations] = useRemoteCollection<Quotation>('quotations', companyKey('quotations'), []);
   const [invoices, setInvoices] = useRemoteCollection<Invoice>('invoices', companyKey('invoices'), []);
+  const [projects, setProjects] = useRemoteCollection<Project>('projects', companyKey('projects'), []);
   const [purchaseInvoices, setPurchaseInvoices] = useRemoteCollection<PurchaseInvoice>('purchaseInvoices', companyKey('purchase_invoices'), []);
   const [payments, setPayments] = useRemoteCollection<Payment>('payments', companyKey('payments'), []);
   const [accounts, setAccounts] = useRemoteCollection<Account>('accounts', companyKey('accounts'), DEFAULT_ACCOUNTS);
@@ -329,6 +338,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
   const getInvoice = (id: string) => invoices.find((i) => i.id === id);
+
+  // Project operations
+  const addProject = (project: Project) => {
+    setProjects((prev) => [...prev, project]);
+    addAuditEntry({
+      type: 'project',
+      action: 'created',
+      target: project.name,
+      details: `Project created for customer ${project.customerId}`,
+      value: project.totalValue,
+    });
+  };
+
+  const updateProject = (project: Project) => {
+    setProjects((prev) => prev.map((p) => (p.id === project.id ? project : p)));
+    addAuditEntry({
+      type: 'project',
+      action: 'updated',
+      target: project.name,
+      details: `Project status updated to ${project.status}`,
+      value: project.totalValue,
+    });
+  };
+
+  const deleteProject = (id: string) => {
+    const existing = projects.find((p) => p.id === id);
+    setProjects((prev) => prev.filter((p) => p.id !== id));
+    if (existing) {
+      addAuditEntry({
+        type: 'project',
+        action: 'deleted',
+        target: existing.name,
+        details: 'Project deleted',
+      });
+    }
+  };
+  const getProject = (id: string) => projects.find((p) => p.id === id);
 
   // Purchase Invoice operations
   const addPurchaseInvoice = (pi: PurchaseInvoice) => {
@@ -1068,6 +1114,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         clients, setClients, addClient, updateClient, deleteClient, getClient, getCustomers, getVendors,
         quotations, setQuotations, addQuotation, updateQuotation, deleteQuotation, getQuotation,
         invoices, setInvoices, addInvoice, updateInvoice, deleteInvoice, getInvoice,
+        projects, setProjects, addProject, updateProject, deleteProject, getProject,
         purchaseInvoices, setPurchaseInvoices, addPurchaseInvoice, updatePurchaseInvoice, deletePurchaseInvoice, getPurchaseInvoice, generatePurchaseInvoiceNumber,
         payments, addPayment, updatePayment, deletePayment, getPaymentsByInvoice, getPaymentsByClient, calculateInvoicePaymentStatus,
         accounts, setAccounts, addAccount, deleteAccount,

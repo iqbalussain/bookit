@@ -68,12 +68,51 @@ export interface Quotation {
 // Invoice types
 export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'partial' | 'overdue' | 'cancelled';
 
+export interface ProjectActivity {
+  id: string;
+  name: string;
+  percentage: number;
+  value: number;
+}
+
+export type ProjectStatus = 'planned' | 'active' | 'completed' | 'on_hold' | 'cancelled';
+
+export interface ProjectInvoiceSummary {
+  projectTotalValue: number;
+  previousPercentage: number;
+  previousAmount: number;
+  currentPercentage: number;
+  currentAmount: number;
+  totalInvoicedPercentage: number;
+  totalInvoicedAmount: number;
+  remainingPercentage: number;
+  remainingAmount: number;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  customerId: string;
+  vendorId: string;
+  totalValue: number;
+  lpoNumber: string;
+  startDate: string;
+  endDate: string;
+  status: ProjectStatus;
+  activities: ProjectActivity[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Invoice {
   id: string;
   number: string;
   clientId: string;
   salesmanId?: string;
   quotationId?: string;
+  invoiceType?: 'normal' | 'project';
+  projectId?: string;
+  projectSummary?: ProjectInvoiceSummary;
   items: LineItem[];
   netTotal: number;
   status: InvoiceStatus;
@@ -169,7 +208,7 @@ export interface JournalLine {
 
 export interface AuditEntry {
   id: string;
-  type: 'client' | 'quotation' | 'invoice' | 'purchase_invoice' | 'payment' | 'voucher' | 'account' | 'settings';
+  type: 'client' | 'quotation' | 'invoice' | 'project' | 'purchase_invoice' | 'payment' | 'voucher' | 'account' | 'settings';
   action: 'created' | 'updated' | 'deleted' | 'processed' | 'saved' | 'approved' | 'paid';
   target: string;
   value?: number;

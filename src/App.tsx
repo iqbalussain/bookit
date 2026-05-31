@@ -20,6 +20,8 @@ const InvoicesList = lazy(() => import("./pages/InvoicesList"));
 const InvoiceForm = lazy(() => import("./pages/InvoiceForm"));
 const PurchaseInvoicesList = lazy(() => import("./pages/PurchaseInvoicesList"));
 const PurchaseInvoiceForm = lazy(() => import("./pages/PurchaseInvoiceForm"));
+const ProjectsList = lazy(() => import("./pages/ProjectsList"));
+const ProjectForm = lazy(() => import("./pages/ProjectForm"));
 const ClientsList = lazy(() => import("./pages/ClientsList"));
 const ClientStatement = lazy(() => import("./pages/ClientStatement"));
 const PaymentForm = lazy(() => import("./pages/PaymentForm"));
@@ -99,6 +101,9 @@ const App = () => (
                     <Route path="/invoices/new" element={<ErrorBoundary inline><InvoiceForm /></ErrorBoundary>} />
                     <Route path="/invoices/:id" element={<ErrorBoundary inline><InvoiceForm /></ErrorBoundary>} />
                     <Route path="/invoices/:id/payment" element={<ErrorBoundary inline><PaymentForm /></ErrorBoundary>} />
+                    <Route path="/projects" element={<ErrorBoundary inline><ProjectsList /></ErrorBoundary>} />
+                    <Route path="/projects/new" element={<ErrorBoundary inline><ProjectForm /></ErrorBoundary>} />
+                    <Route path="/projects/:id" element={<ErrorBoundary inline><ProjectForm /></ErrorBoundary>} />
                     <Route path="/purchases" element={<ErrorBoundary inline><PurchaseInvoicesList /></ErrorBoundary>} />
                     <Route path="/purchases/new" element={<ErrorBoundary inline><PurchaseInvoiceForm /></ErrorBoundary>} />
                     <Route path="/purchases/:id" element={<ErrorBoundary inline><PurchaseInvoiceForm /></ErrorBoundary>} />
