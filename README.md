@@ -1,4 +1,4 @@
-# MITC - Invoice Management System
+# MITC - Invoice Management System (Bookit)
 
 A modern invoice and accounting management application built with React, TypeScript, and Electron.
 
