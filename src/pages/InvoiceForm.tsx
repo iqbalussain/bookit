@@ -98,7 +98,7 @@ export default function InvoiceForm() {
   }, [invoiceType, selectedProject, isEditing]);
 
   useEffect(() => {
-    if (invoiceNumberMode === 'auto') {
+    if (invoiceNumberMode === 'auto' && !isEditing) {
       setInvoiceNumber(generateInvoiceNumber());
     }
     // generateInvoiceNumber identity is unstable across context renders;
