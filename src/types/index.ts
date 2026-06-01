@@ -73,6 +73,7 @@ export interface ProjectActivity {
   name: string;
   percentage: number;
   value: number;
+  calculatedValue?: number;
 }
 
 export type ProjectStatus = 'planned' | 'active' | 'completed' | 'on_hold' | 'cancelled';
@@ -115,6 +116,9 @@ export interface Invoice {
   quotationId?: string;
   invoiceType?: 'normal' | 'project';
   projectId?: string;
+  selectedActivityIds?: string[];
+  billingPercentage?: number;
+  billingValue?: number;
   projectSummary?: ProjectInvoiceSummary;
   items: LineItem[];
   netTotal: number;

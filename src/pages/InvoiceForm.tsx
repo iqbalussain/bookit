@@ -59,6 +59,8 @@ export default function InvoiceForm() {
   const [invoiceType, setInvoiceType] = useState<'normal' | 'project'>(existingInvoice?.invoiceType || 'normal');
   const [projectId, setProjectId] = useState(existingInvoice?.projectId || '');
   const [projectInvoicePercentage, setProjectInvoicePercentage] = useState<number>(existingInvoice?.projectSummary?.currentPercentage || 0);
+  const [projectBillingValue, setProjectBillingValue] = useState<number>(existingInvoice?.billingValue || 0);
+  const [selectedActivityIds, setSelectedActivityIds] = useState<string[]>(existingInvoice?.selectedActivityIds || []);
   const [invoiceNumberMode, setInvoiceNumberMode] = useState<'auto' | 'manual'>(existingInvoice?.invoiceNumberMode || 'auto');
   const [invoiceNumber, setInvoiceNumber] = useState(existingInvoice?.number || generateInvoiceNumber());
   const [vatEnabled, setVatEnabled] = useState(existingInvoice?.vatEnabled ?? settings.vatEnabled ?? true);
@@ -91,11 +93,52 @@ export default function InvoiceForm() {
     [projectId, projects],
   );
 
+  const projectActivities = useMemo(() => selectedProject?.activities || [], [selectedProject]);
+  const selectedProjectActivities = useMemo(
+    () => projectActivities.filter((activity) => selectedActivityIds.includes(activity.id)),
+    [projectActivities, selectedActivityIds],
+  );
+
   useEffect(() => {
     if (invoiceType === 'project' && selectedProject && !isEditing) {
       setClientId(selectedProject.customerId);
     }
   }, [invoiceType, selectedProject, isEditing]);
+
+  useEffect(() => {
+    if (invoiceType === 'project' && selectedProject) {
+      if (!isEditing) {
+        setSelectedActivityIds([]);
+        setProjectInvoicePercentage(0);
+        setProjectBillingValue(0);
+      }
+      setItems([{ id: crypto.randomUUID(), name: '', description: '', quantity: 1, rate: 0, total: 0 }]);
+    }
+  }, [invoiceType, selectedProject?.id, isEditing]);
+
+  useEffect(() => {
+    if (invoiceType !== 'project' || !selectedProject) return;
+    const selectedActivities = selectedProject.activities.filter((activity) => selectedActivityIds.includes(activity.id));
+    const totalPercentage = selectedActivities.reduce((sum, activity) => sum + activity.percentage, 0);
+    const totalValue = selectedActivities.reduce((sum, activity) => sum + activity.value, 0);
+    setProjectInvoicePercentage(totalPercentage);
+    setProjectBillingValue(totalValue);
+    if (selectedActivities.length > 0) {
+      setItems(selectedActivities.map((activity) => ({
+        id: crypto.randomUUID(),
+        name: activity.name,
+        description: `Project activity: ${activity.name}`,
+        quantity: 1,
+        rate: activity.value,
+        total: activity.value,
+        vatApplicable: false,
+        vatPercentage: 0,
+        vatAmount: 0,
+      })));
+    } else {
+      setItems([{ id: crypto.randomUUID(), name: '', description: '', quantity: 1, rate: 0, total: 0 }]);
+    }
+  }, [invoiceType, selectedProject, selectedActivityIds]);
 
   useEffect(() => {
     if (invoiceNumberMode === 'auto' && !isEditing) {
@@ -120,7 +163,7 @@ export default function InvoiceForm() {
       0,
     );
 
-    const currentAmount = grandTotal;
+    const currentAmount = projectBillingValue;
     const currentPercentage = projectInvoicePercentage;
     const totalInvoicedAmount = previousAmount + currentAmount;
     const totalInvoicedPercentage = Math.min(100, previousPercentage + currentPercentage);
@@ -224,6 +267,7 @@ export default function InvoiceForm() {
     if (invoices.some((invoice) => invoice.number === invoiceNumber && invoice.id !== existingInvoice?.id)) { toast({ title: 'Error', description: 'Invoice number already exists', variant: 'destructive' }); return; }
     if (items.some((item) => !item.name.trim())) { toast({ title: 'Error', description: 'All items must have a name', variant: 'destructive' }); return; }
     if (invoiceType === 'project' && !projectId) { toast({ title: 'Error', description: 'Please select a project for project invoices', variant: 'destructive' }); return; }
+    if (invoiceType === 'project' && selectedActivityIds.length === 0) { toast({ title: 'Error', description: 'Please select completed project activities for billing', variant: 'destructive' }); return; }
     if (invoiceType === 'project' && projectInvoicePercentage <= 0) { toast({ title: 'Error', description: 'Project billing percentage must be greater than 0', variant: 'destructive' }); return; }
 
     const now = new Date().toISOString();
@@ -245,6 +289,9 @@ export default function InvoiceForm() {
         salesmanId,
         invoiceType,
         projectId: invoiceType === 'project' ? projectId : undefined,
+        selectedActivityIds: invoiceType === 'project' ? selectedActivityIds : undefined,
+        billingPercentage: invoiceType === 'project' ? projectInvoicePercentage : undefined,
+        billingValue: invoiceType === 'project' ? projectBillingValue : undefined,
         projectSummary: invoiceType === 'project' ? projectSummary : undefined,
         updatedAt: now,
       };
@@ -270,6 +317,9 @@ export default function InvoiceForm() {
         quotationId: sourceQuotation?.id,
         invoiceType,
         projectId: invoiceType === 'project' ? projectId : undefined,
+        selectedActivityIds: invoiceType === 'project' ? selectedActivityIds : undefined,
+        billingPercentage: invoiceType === 'project' ? projectInvoicePercentage : undefined,
+        billingValue: invoiceType === 'project' ? projectBillingValue : undefined,
         projectSummary: invoiceType === 'project' ? projectSummary : undefined,
         items,
         netTotal: grandTotal,
@@ -409,23 +459,32 @@ export default function InvoiceForm() {
             </div>
 
             {invoiceType === 'project' && (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Project *</Label>
-                  <Select value={projectId} onValueChange={setProjectId}>
-                    <SelectTrigger className="flex-1 h-9"><SelectValue placeholder="Select project" /></SelectTrigger>
-                    <SelectContent>
-                      {projects.map((project) => (
-                        <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              <>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Project *</Label>
+                    <Select value={projectId} onValueChange={setProjectId}>
+                      <SelectTrigger className="flex-1 h-9"><SelectValue placeholder="Select project" /></SelectTrigger>
+                      <SelectContent>
+                        {projects.map((project) => (
+                          <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Project Billing %</Label>
+                    <Input type="number" value={projectInvoicePercentage} disabled className="h-9 bg-muted/30" />
+                    <p className="text-[10px] text-muted-foreground">Calculated from selected project activities.</p>
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Project Billing %</Label>
-                  <Input type="number" min="0" max="100" value={projectInvoicePercentage} onChange={(e) => setProjectInvoicePercentage(Number(e.target.value) || 0)} className="h-9" />
+                <div className="grid gap-3 sm:grid-cols-2 mt-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Project Billing Value</Label>
+                    <Input type="text" value={`${currencySymbol}${projectBillingValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`} disabled className="h-9 bg-muted/30" />
+                  </div>
                 </div>
-              </div>
+              </>
             )}
           </div>
 
@@ -543,6 +602,40 @@ export default function InvoiceForm() {
               </div>
             </div>
             <Progress value={Math.min(100, Math.max(0, projectSummary.totalInvoicedPercentage))} />
+          </CardContent>
+        </Card>
+      )}
+
+      {invoiceType === 'project' && selectedProject && (
+        <Card>
+          <CardHeader className="py-2.5 px-3"><CardTitle className="text-sm">Project Activities</CardTitle></CardHeader>
+          <CardContent className="px-3 pb-3 space-y-3">
+            <p className="text-xs text-muted-foreground">Select the project activities to include on this invoice. The current billing percentage and value are calculated from these selections.</p>
+            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+              <span>{selectedProjectActivities.length} activity selected</span>
+              <span>Billing {projectInvoicePercentage.toFixed(2)}% / {currencySymbol}{projectBillingValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+            </div>
+            <div className="space-y-2">
+              {projectActivities.length > 0 ? projectActivities.map((activity) => (
+                <label key={activity.id} className="flex items-center gap-3 rounded-md border p-3">
+                  <input
+                    type="checkbox"
+                    checked={selectedActivityIds.includes(activity.id)}
+                    onChange={(event) => {
+                      const checked = event.target.checked;
+                      setSelectedActivityIds((prev) => checked ? [...prev, activity.id] : prev.filter((id) => id !== activity.id));
+                    }}
+                    className="h-4 w-4 rounded border-muted-foreground text-primary focus:ring-primary"
+                  />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">{activity.name}</p>
+                    <p className="text-xs text-muted-foreground">{activity.percentage}% | {currencySymbol}{activity.value.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+                  </div>
+                </label>
+              )) : (
+                <div className="rounded-md border bg-muted/20 p-3 text-sm text-muted-foreground">No activities defined for this project.</div>
+              )}
+            </div>
           </CardContent>
         </Card>
       )}

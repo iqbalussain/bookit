@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '@/contexts/AppContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, Plus, Save, Trash2 } from 'lucide-react';
-import type { Project, ProjectActivity, ProjectStatus } from '@/types';
+import { currencySymbols, type Project, type ProjectActivity, type ProjectStatus } from '@/types';
 
 const projectStatuses: ProjectStatus[] = ['planned', 'active', 'completed', 'on_hold', 'cancelled'];
 
@@ -47,9 +47,50 @@ export default function ProjectForm() {
 
   const customers = getCustomers();
 
+  const totalActivityPercentage = useMemo(
+    () => (formData.activities || []).reduce((sum, activity) => sum + Number(activity.percentage || 0), 0),
+    [formData.activities],
+  );
+
+  const totalActivityValue = useMemo(
+    () => (formData.activities || []).reduce((sum, activity) => sum + Number(activity.value || 0), 0),
+    [formData.activities],
+  );
+
+  const remainingActivityPercentage = useMemo(() => Math.max(0, 100 - totalActivityPercentage), [totalActivityPercentage]);
+  const duplicateActivityNames = useMemo(() => {
+    const names = (formData.activities || [])
+      .map((activity) => activity.name.trim().toLowerCase())
+      .filter(Boolean);
+    return new Set(names).size !== names.length;
+  }, [formData.activities]);
+
+  useEffect(() => {
+    if (!formData.activities || formData.activities.length === 0) return;
+    setFormData((prev) => {
+      const projectValue = Number(prev.totalValue || 0);
+      return {
+        ...prev,
+        activities: (prev.activities || []).map((activity) => {
+          const percentage = Number(activity.percentage || 0);
+          const calculatedValue = Number(((projectValue * percentage) / 100).toFixed(2));
+          return { ...activity, value: calculatedValue, calculatedValue };
+        }),
+      };
+    });
+  }, [formData.totalValue]);
+
   const handleSubmit = () => {
     if (!formData.name || !formData.customerId || !formData.totalValue) {
       toast({ title: 'Error', description: 'Name, customer, and total value are required.', variant: 'destructive' });
+      return;
+    }
+    if (duplicateActivityNames) {
+      toast({ title: 'Error', description: 'Each activity name must be unique.', variant: 'destructive' });
+      return;
+    }
+    if (totalActivityPercentage > 100) {
+      toast({ title: 'Error', description: 'Total activity percentage cannot exceed 100%.', variant: 'destructive' });
       return;
     }
 
@@ -84,8 +125,16 @@ export default function ProjectForm() {
     setFormData((prev) => {
       const activities = [...(prev.activities || [])];
       const current = { ...(activities[index] || { id: crypto.randomUUID(), name: '', percentage: 0, value: 0 }) };
-      if (field === 'percentage' || field === 'value') {
-        (current as any)[field] = Number(value) || 0;
+      if (field === 'percentage') {
+        const percentage = Number(value) || 0;
+        const projectValue = Number(prev.totalValue || 0);
+        const calculatedValue = Number(((projectValue * percentage) / 100).toFixed(2));
+        current.percentage = percentage;
+        current.value = calculatedValue;
+        current.calculatedValue = calculatedValue;
+      } else if (field === 'value') {
+        current.value = Number(value) || 0;
+        current.calculatedValue = current.value;
       } else {
         (current as any)[field] = value;
       }
@@ -95,11 +144,12 @@ export default function ProjectForm() {
   };
 
   const addActivity = () => {
+    const projectValue = Number(formData.totalValue || 0);
     setFormData((prev) => ({
       ...prev,
       activities: [
         ...(prev.activities || []),
-        { id: crypto.randomUUID(), name: '', percentage: 0, value: 0 },
+        { id: crypto.randomUUID(), name: '', percentage: 0, value: 0, calculatedValue: 0 },
       ],
     }));
   };
@@ -203,6 +253,26 @@ export default function ProjectForm() {
                 <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Activity
               </Button>
             </div>
+            <div className="grid gap-3 sm:grid-cols-3 mb-3">
+              <div className="rounded-lg border bg-muted/20 p-3">
+                <p className="text-[11px] uppercase text-muted-foreground">Total %</p>
+                <p className="text-sm font-semibold">{totalActivityPercentage.toFixed(2)}%</p>
+              </div>
+              <div className="rounded-lg border bg-muted/20 p-3">
+                <p className="text-[11px] uppercase text-muted-foreground">Total Value</p>
+                <p className="text-sm font-semibold">{currencySymbols[settings.currency]}{totalActivityValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+              </div>
+              <div className="rounded-lg border bg-muted/20 p-3">
+                <p className="text-[11px] uppercase text-muted-foreground">Remaining %</p>
+                <p className="text-sm font-semibold">{remainingActivityPercentage.toFixed(2)}%</p>
+              </div>
+            </div>
+            {(duplicateActivityNames || totalActivityPercentage > 100) && (
+              <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+                {duplicateActivityNames ? 'Duplicate activity names are not allowed. ' : ''}
+                {totalActivityPercentage > 100 ? 'Total activity percentage cannot exceed 100%.' : ''}
+              </div>
+            )}
 
             {(formData.activities || []).length === 0 ? (
               <p className="text-sm text-muted-foreground">No activities added yet.</p>
@@ -220,8 +290,9 @@ export default function ProjectForm() {
                         <Input type="number" min="0" max="100" value={activity.percentage} onChange={(e) => updateActivity(index, 'percentage', e.target.value)} className="h-9" />
                       </div>
                       <div className="space-y-1.5">
-                        <Label className="text-xs">Value</Label>
-                        <Input type="number" min="0" step="0.01" value={activity.value} onChange={(e) => updateActivity(index, 'value', e.target.value)} className="h-9" />
+                        <Label className="text-xs">Calculated Value</Label>
+                        <Input type="number" min="0" step="0.01" value={activity.value} disabled className="h-9 bg-muted/30" />
+                        <p className="text-[10px] text-muted-foreground">Auto calculated from project value and percentage.</p>
                       </div>
                       <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => removeActivity(index)}>
                         <Trash2 className="h-4 w-4" />
