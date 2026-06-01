@@ -16,16 +16,20 @@ export function useLocalStorage<T>(
   key: string,
   initialValue: T,
 ): [T, (value: T | ((prev: T) => T)) => void] {
+  // Keep initialValue in a ref so callers can pass fresh literals (e.g. `[]`)
+  // without changing the identity of our read function on every render.
+  const initialRef = useRef(initialValue);
+
   const readValue = useCallback((): T => {
-    if (typeof window === 'undefined') return initialValue;
+    if (typeof window === 'undefined') return initialRef.current;
     try {
       const item = window.localStorage.getItem(key);
-      return item ? (JSON.parse(item) as T) : initialValue;
+      return item ? (JSON.parse(item) as T) : initialRef.current;
     } catch (error) {
       console.warn(`[localStorage] Error reading key "${key}":`, error);
-      return initialValue;
+      return initialRef.current;
     }
-  }, [initialValue, key]);
+  }, [key]);
 
   const [storedValue, setStoredValue] = useState<T>(readValue);
 
@@ -53,9 +57,15 @@ export function useLocalStorage<T>(
     [key],
   );
 
+  // Re-read only when the key itself changes (e.g. switching companies).
+  const lastKeyRef = useRef(key);
   useEffect(() => {
-    setStoredValue(readValue());
-  }, [readValue]);
+    if (lastKeyRef.current === key) return;
+    lastKeyRef.current = key;
+    const fresh = readValue();
+    storedRef.current = fresh;
+    setStoredValue(fresh);
+  }, [key, readValue]);
 
   return [storedValue, setValue];
 }
